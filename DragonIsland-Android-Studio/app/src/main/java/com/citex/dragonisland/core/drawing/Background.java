@@ -161,7 +161,12 @@ public class Background {
 
         if(!Settings.Background)
         	return cam;
-        
+
+        // The scenario is a live WebView animation behind the transparent
+        // GL surface instead of these static layer images.
+        if(Settings.WebBackground)
+        	return cam;
+
         // Set the position of background.
         int bgX = (int)cam.x - ((int)cam.x / 512 * 512);
         int bgY = (int)cam.y - ((int)cam.y / 512 * 512);

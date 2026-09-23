@@ -38,6 +38,10 @@ public class Settings {
 	
 	/** Enable sound effects. */
 	public static boolean Sound = true;
+
+	/** Draw the scenario as a live WebView animation behind the game instead
+	 *  of the static bgr/near/middle/far images. */
+	public static boolean WebBackground = true;
 	
 	/** Enable the debug menu. */
 	public static boolean DebugMenu = false;

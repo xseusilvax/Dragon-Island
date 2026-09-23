@@ -30,6 +30,7 @@ import javax.microedition.khronos.opengles.GL;
 import javax.microedition.khronos.opengles.GL10;
 
 import android.content.Context;
+import android.graphics.PixelFormat;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
@@ -65,6 +66,8 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
         mHolder = getHolder();
         mHolder.addCallback(this);
         mHolder.setType(SurfaceHolder.SURFACE_TYPE_GPU);
+        mHolder.setFormat(PixelFormat.TRANSLUCENT);
+        setZOrderOnTop(true);
     }
 
     /**

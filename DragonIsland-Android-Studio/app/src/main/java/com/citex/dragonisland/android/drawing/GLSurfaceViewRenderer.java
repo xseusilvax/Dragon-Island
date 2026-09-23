@@ -53,7 +53,12 @@ public class GLSurfaceViewRenderer implements GLSurfaceView.Renderer {
         
     	// OpenGL initialisation.
         gl.glHint(GL10.GL_PERSPECTIVE_CORRECTION_HINT, GL10.GL_FASTEST);
-        gl.glClearColor(0.5f, 0.5f, 0.5f, 1);
+        if(Settings.WebBackground) {
+        	// Transparent clear so the WebView scenario behind the surface shows through.
+        	gl.glClearColor(0f, 0f, 0f, 0f);
+        } else {
+        	gl.glClearColor(0.5f, 0.5f, 0.5f, 1);
+        }
         gl.glShadeModel(GL10.GL_FLAT);
         gl.glDisable(GL10.GL_DEPTH_TEST);
         gl.glEnable(GL10.GL_TEXTURE_2D);
@@ -109,9 +114,18 @@ public class GLSurfaceViewRenderer implements GLSurfaceView.Renderer {
      * Gets the returns a standard configuration.
      */
     public int[] getConfigSpec() {
-        
-    	// We don't need a depth buffer, and don't care about our color depth.
-        int[] configSpec = {EGL10.EGL_DEPTH_SIZE, 0, EGL10.EGL_NONE};
+
+    	// We don't need a depth buffer. Request an alpha channel so the
+    	// surface can be cleared transparent when Settings.WebBackground
+    	// is on, letting the WebView scenario behind it show through.
+        int[] configSpec = {
+        	EGL10.EGL_RED_SIZE, 8,
+        	EGL10.EGL_GREEN_SIZE, 8,
+        	EGL10.EGL_BLUE_SIZE, 8,
+        	EGL10.EGL_ALPHA_SIZE, 8,
+        	EGL10.EGL_DEPTH_SIZE, 0,
+        	EGL10.EGL_NONE
+        };
         return configSpec;
     }
 

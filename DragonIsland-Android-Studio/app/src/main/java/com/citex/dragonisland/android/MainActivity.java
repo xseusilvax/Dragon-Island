@@ -8,9 +8,13 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.AssetManager;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Environment;
 import android.view.View;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.widget.FrameLayout;
 import com.citex.dragonisland.android.drawing.GLSurfaceView;
 import com.citex.dragonisland.android.drawing.GLSurfaceViewRenderer;
 import com.citex.dragonisland.android.event.GLSurfaceViewEvent;
@@ -53,6 +57,9 @@ public class MainActivity extends Activity {
     /** Graphics renderer. */
     public GLSurfaceViewRenderer mRenderer;
 
+    /** Live scenario animation, drawn behind the transparent GL surface. */
+    private WebView mWebView;
+
     /**
      * Called when the activity is starting. 
      * @param savedInstanceState Contains saved instance state data.
@@ -88,7 +95,28 @@ public class MainActivity extends Activity {
 		mAssetManager = this.getAssets();
 		mGLSurfaceView = new GLSurfaceViewEvent(this);
 
-		setContentView(mGLSurfaceView);
+		if(Settings.WebBackground) {
+
+			FrameLayout root = new FrameLayout(this);
+
+			// Live scenario animation, underneath.
+			mWebView = new WebView(this);
+			WebSettings webSettings = mWebView.getSettings();
+			webSettings.setJavaScriptEnabled(true);
+			mWebView.setBackgroundColor(Color.TRANSPARENT);
+			mWebView.loadUrl("file:///android_asset/web/invasao.html");
+			root.addView(mWebView, new FrameLayout.LayoutParams(
+					FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+
+			// Game surface, transparent, on top.
+			root.addView(mGLSurfaceView, new FrameLayout.LayoutParams(
+					FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+
+			setContentView(root);
+
+		} else {
+			setContentView(mGLSurfaceView);
+		}
     }
 
     /**
@@ -141,7 +169,11 @@ public class MainActivity extends Activity {
     	// Pause GL surface view.
     	if(mGLSurfaceView != null)
     		mGLSurfaceView.onPause();
-		
+
+    	// Pause the scenario animation.
+    	if(mWebView != null)
+    		mWebView.onPause();
+
     	// Save settings.
     	try {
 			Settings.saveSettings(Settings.InternalStorageFolder + "settings.dat");
@@ -172,12 +204,20 @@ public class MainActivity extends Activity {
         // Resume GL surface view.
     	if(mGLSurfaceView != null)
     		mGLSurfaceView.onResume();
-    	
+
+    	// Resume the scenario animation.
+    	if(mWebView != null)
+    		mWebView.onResume();
+
     }
 
     /** Called before the activity is destroyed */
     @Override
     public void onDestroy() {
+
+    	// Destroy the scenario animation.
+    	if(mWebView != null)
+    		mWebView.destroy();
 
     	// Save settings.
     	try {
