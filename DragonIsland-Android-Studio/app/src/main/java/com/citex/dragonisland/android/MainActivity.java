@@ -8,28 +8,14 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.AssetManager;
-import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Environment;
-import android.util.DisplayMetrics;
-import android.view.Gravity;
 import android.view.View;
-import android.view.ViewGroup;
-import android.widget.LinearLayout.LayoutParams;
-import android.widget.RelativeLayout;
-
-import com.google.android.gms.ads.AdRequest;
-import com.google.android.gms.ads.AdSize;
-import com.google.android.gms.ads.AdView;
-import com.google.android.gms.ads.MobileAds;
-
 import com.citex.dragonisland.android.drawing.GLSurfaceView;
 import com.citex.dragonisland.android.drawing.GLSurfaceViewRenderer;
 import com.citex.dragonisland.android.event.GLSurfaceViewEvent;
 import com.citex.dragonisland.core.game.GameMode;
 import com.citex.dragonisland.core.game.Settings;
-import com.google.android.gms.ads.initialization.InitializationStatus;
-import com.google.android.gms.ads.initialization.OnInitializationCompleteListener;
 
 /**
  * MainActivity.java
@@ -67,12 +53,6 @@ public class MainActivity extends Activity {
     /** Graphics renderer. */
     public GLSurfaceViewRenderer mRenderer;
 
-    /** View which displays AdMob advertisements. */
-    public static AdView mAdView;
-
-    /** Is the advertising visible. */
-    public boolean mAdVisible;
-    
     /**
      * Called when the activity is starting. 
      * @param savedInstanceState Contains saved instance state data.
@@ -109,79 +89,20 @@ public class MainActivity extends Activity {
 		mGLSurfaceView = new GLSurfaceViewEvent(this);
 
 		setContentView(mGLSurfaceView);
-
-
-        MobileAds.initialize(this, new OnInitializationCompleteListener() {
-            @Override
-            public void onInitializationComplete(InitializationStatus initializationStatus) {
-            }
-        });
-
-        mAdVisible = false;
-
-        // Create an ad.
-        mAdView = new AdView(mActivity);
-        mAdView.setAdUnitId("ca-app-pub-1622304112165026/1588105391");
-        mAdView.setAdSize(AdSize.BANNER);
-        mAdView.setBackgroundColor(Color.TRANSPARENT);
-
-        // Create an ad request and get test ads on a physical device.
-        AdRequest adRequest = new AdRequest.Builder()
-                .build();
-
-        // Start loading the ad in the background.
-        mAdView.loadAd(adRequest);
     }
- 
+
     /**
-     * Adds an AdMob ad banner.
+     * No-op: ads removed.
      */
     public void addAdvertisement() {
-
-        // Create a DisplayMetrics object to screen dimensions.
-        DisplayMetrics metrics = new DisplayMetrics();
-        getWindowManager().getDefaultDisplay().getMetrics(metrics);
-        int width = metrics.widthPixels;
-        int height = metrics.heightPixels;
-
-        // Add the AdMob panel.
-        RelativeLayout rl = new RelativeLayout(mActivity);
-        LayoutParams params = new LayoutParams(width + 90, (int)(height - 30));
-        mActivity.addContentView(rl, params);
-
-        mAdView.setEnabled(true);
-        rl.addView(mAdView);
-        rl.setGravity(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
-        rl.bringToFront();
-        mAdView.setVisibility(AdView.VISIBLE);
-
-        mAdVisible = true;
-
     }
-    
+
     /**
-     * Removes an AdMob ad banner.
+     * No-op: ads removed.
      */
     public void removeAdvertisement() {
-
-        if(mAdVisible) {
-
-            // Remove the AdMob panel.
-            mAdView.setEnabled(false);
-            mAdView.setVisibility(View.GONE);
-
-            ViewGroup vg = (ViewGroup)(mAdView.getParent());
-            vg.removeView(mAdView);
-
-            RelativeLayout rl = new RelativeLayout(mActivity);
-            View admobAds = (View) findViewById(1);
-            rl.removeView(admobAds);
-
-            mAdVisible = false;
-
-        }
     }
-    
+
     /**
      * Restarts the activity.
      * @param context Context object.
@@ -217,10 +138,6 @@ public class MainActivity extends Activity {
     @Override
     public void onPause() {
 
-        // Pause adView.
-        if (mAdView != null)
-            mAdView.pause();
-
     	// Pause GL surface view.
     	if(mGLSurfaceView != null)
     		mGLSurfaceView.onPause();
@@ -252,10 +169,6 @@ public class MainActivity extends Activity {
         
     	super.onResume();
 
-        // Resume advertisements.
-        if (mAdView != null)
-            mAdView.resume();
-
         // Resume GL surface view.
     	if(mGLSurfaceView != null)
     		mGLSurfaceView.onResume();
@@ -265,10 +178,6 @@ public class MainActivity extends Activity {
     /** Called before the activity is destroyed */
     @Override
     public void onDestroy() {
-
-        // Destroy advertisements.
-        if (mAdView != null)
-            mAdView.destroy();
 
     	// Save settings.
     	try {

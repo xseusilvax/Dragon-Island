@@ -43,7 +43,7 @@ public class Settings {
 	public static boolean DebugMenu = false;
 	
 	/** Enable level select. */
-	public static boolean LevelSelect = false;
+	public static boolean LevelSelect = true;
 	
 	/** Enables level editor. */
 	public static boolean LevelEditor = false;
