@@ -650,13 +650,14 @@ public class Game extends Timing {
 
 		if(mMain.getScreenTransition().getTimer() > 0) {
         
-	        // Set the background colour.
+	        // Set the background colour. Alpha 0 when the scenario is a live
+	        // WebView behind the surface, so it isn't painted over every frame.
 			Color color = mMain.getBackground().getColor();
-	        gl.glClearColor(color.getRed() / 255.0f, color.getGreen() / 255.0f, color.getBlue() / 255.0f, 1.0f);
-			gl.glClear(GL10.GL_COLOR_BUFFER_BIT | GL10.GL_DEPTH_BUFFER_BIT);   
-	        
+	        gl.glClearColor(color.getRed() / 255.0f, color.getGreen() / 255.0f, color.getBlue() / 255.0f, Settings.WebBackground ? 0f : 1.0f);
+			gl.glClear(GL10.GL_COLOR_BUFFER_BIT | GL10.GL_DEPTH_BUFFER_BIT);
+
 	        // Draw license screen.
-	        paintComponent(gl, dt); 
+	        paintComponent(gl, dt);
 		}
      
     	// Draw screen transition.
