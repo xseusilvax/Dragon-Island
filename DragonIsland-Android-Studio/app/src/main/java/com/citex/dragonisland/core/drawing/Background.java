@@ -54,7 +54,19 @@ public class Background {
     
     /** Background colour. */
     private Color mColor;
-     
+
+    /** Animated far layer frames. Null means the far layer is a single static image. */
+    private IBufferedImage[] mFarFrames;
+
+    /** Current far layer animation frame index. */
+    private float mFarFrameIndex;
+
+    /** Time elapsed before advancing the far layer animation frame. */
+    private float mFarFrameTimer;
+
+    /** Time in milliseconds between far layer animation frames. */
+    private float mFarAnimationSpeed;
+
     /**
      * Initialises a Background object.
      * @param g Graphics context.
@@ -92,6 +104,28 @@ public class Background {
 
     	// Initialise the background layer positions.
     	setHeight(height);
+    }
+
+    /**
+     * Enables frame-by-frame animation for the far background layer, in
+     * place of the single static image loaded by the constructor. Loads
+     * bgr/far/&lt;startIndex&gt;.png .. bgr/far/&lt;startIndex + frameCount - 1&gt;.png
+     * and cycles through them over time, the same way Sprite cycles frames
+     * from a SpriteSheet.
+     * @param g Graphics context.
+     * @param startIndex Image index of the first frame.
+     * @param frameCount Number of frames.
+     * @param speedMs Time in milliseconds between frames.
+     * @throws IOException
+     */
+    public void setFarAnimation(Object g, int startIndex, int frameCount, float speedMs) throws IOException {
+    	mFarFrames = new IBufferedImage[frameCount];
+    	for (int i = 0; i < frameCount; i++) {
+    		mFarFrames[i] = FileIO.getImageResource(g, "bgr/far/" + (startIndex + i) + ".png");
+    	}
+    	mFarFrameIndex = 0;
+    	mFarFrameTimer = 0;
+    	mFarAnimationSpeed = speedMs;
     }
 
     /**
@@ -136,21 +170,35 @@ public class Background {
     	if(!Settings.Paused && Settings.Animation) {
 	        for (int i = 0; i < 3; i++) {
 	    		if (mX[i] < 512) {
-	    			mX[i] += mScroll[i] * dt / 60; 
+	    			mX[i] += mScroll[i] * dt / 60;
 	    		} else {
 	    			mX[i] = 0;
 	    		}
 	    	}
     	}
 
+        // Advance the far layer animation frame, if animated.
+        IBufferedImage farImage = mImage[2];
+        if (mFarFrames != null && mFarFrames.length > 1) {
+        	if(!Settings.Paused && Settings.Animation) {
+        		if (mFarFrameTimer + dt < mFarAnimationSpeed) {
+        			mFarFrameTimer += dt;
+        		} else {
+        			mFarFrameIndex = (mFarFrameIndex + 1) % mFarFrames.length;
+        			mFarFrameTimer = 0;
+        		}
+        	}
+        	farImage = mFarFrames[(int)mFarFrameIndex];
+        }
+
         // Draw background.
         if (mAlign == 0) {
-        	
+
         	// Far.
             if(mIndex[2] != 0) {
-            	mImage[2].draw(g, -bgX - mX[2], mY[2] - cam.y);
-            	mImage[2].draw(g, -bgX - mX[2] + 512, mY[2] - cam.y);
-            	mImage[2].draw(g, -bgX - mX[2] + 1024, mY[2] - cam.y);
+            	farImage.draw(g, -bgX - mX[2], mY[2] - cam.y);
+            	farImage.draw(g, -bgX - mX[2] + 512, mY[2] - cam.y);
+            	farImage.draw(g, -bgX - mX[2] + 1024, mY[2] - cam.y);
             }
 
             // Middle.
@@ -169,9 +217,9 @@ public class Background {
 
         } else {
         	// Far.
-            mImage[2].draw(g, 0, -bgY);
-            mImage[2].draw(g, 0, -bgY + 512);
-            mImage[2].draw(g, 0, -bgY + 1024);
+            farImage.draw(g, 0, -bgY);
+            farImage.draw(g, 0, -bgY + 512);
+            farImage.draw(g, 0, -bgY + 1024);
         }
         return cam;
     }   
@@ -236,5 +284,10 @@ public class Background {
         mImage[0].destroy(gl);
         mImage[1].destroy(gl);
         mImage[2].destroy(gl);
+        if (mFarFrames != null) {
+        	for (IBufferedImage frame : mFarFrames) {
+        		frame.destroy(gl);
+        	}
+        }
     }
 }
