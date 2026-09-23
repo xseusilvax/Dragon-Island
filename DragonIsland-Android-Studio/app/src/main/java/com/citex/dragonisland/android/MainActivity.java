@@ -1,6 +1,8 @@
 package com.citex.dragonisland.android;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import android.app.Activity;
 import android.app.AlarmManager;
@@ -58,7 +60,51 @@ public class MainActivity extends Activity {
     public GLSurfaceViewRenderer mRenderer;
 
     /** Live scenario animation, drawn behind the transparent GL surface. */
-    private WebView mWebView;
+    private static WebView mWebView;
+
+    /** The scenario file currently loaded in mWebView, to avoid reloading it every frame. */
+    private static String mCurrentScenario;
+
+    /** World.Level (e.g. "1.3") to scenario file under assets/web/. */
+    private static final Map<String, String> SCENARIOS = new HashMap<>();
+    static {
+    	SCENARIOS.put("0.0", "invasao.html");
+    	SCENARIOS.put("1.1", "cidade.html");
+    	SCENARIOS.put("1.2", "lua.html");
+    	SCENARIOS.put("1.3", "foguete.html");
+    	SCENARIOS.put("1.4", "meteoro.html");
+    	SCENARIOS.put("1.5", "planeta.html");
+    	SCENARIOS.put("1.6", "buraco-negro.html");
+    	SCENARIOS.put("1.7", "estacao.html");
+    	SCENARIOS.put("1.8", "cometas.html");
+    }
+
+    /**
+     * Loads the scenario that matches a level path into the background WebView,
+     * if it is not already loaded. Safe to call from any thread.
+     * @param levelPath Level file path, e.g. "1.3.0.lvl".
+     */
+    public static void setScenario(String levelPath) {
+    	if (mWebView == null || levelPath == null) {
+    		return;
+    	}
+    	String[] parts = levelPath.split("\\.");
+    	if (parts.length < 2) {
+    		return;
+    	}
+    	String key = parts[0] + "." + parts[1];
+    	String file = SCENARIOS.get(key);
+    	if (file == null || file.equals(mCurrentScenario)) {
+    		return;
+    	}
+    	mCurrentScenario = file;
+    	final String url = "file:///android_asset/web/" + file;
+    	mActivity.runOnUiThread(new Runnable() {
+    		public void run() {
+    			mWebView.loadUrl(url);
+    		}
+    	});
+    }
 
     /**
      * Called when the activity is starting. 
@@ -104,7 +150,8 @@ public class MainActivity extends Activity {
 			WebSettings webSettings = mWebView.getSettings();
 			webSettings.setJavaScriptEnabled(true);
 			mWebView.setBackgroundColor(Color.TRANSPARENT);
-			mWebView.loadUrl("file:///android_asset/web/invasao.html");
+			mCurrentScenario = "invasao.html";
+			mWebView.loadUrl("file:///android_asset/web/" + mCurrentScenario);
 			root.addView(mWebView, new FrameLayout.LayoutParams(
 					FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 

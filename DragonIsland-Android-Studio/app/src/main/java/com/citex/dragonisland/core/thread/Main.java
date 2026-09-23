@@ -218,8 +218,11 @@ public class Main implements Runnable {
     			// Display the level opening screen.
     			boolean mShowLevelOpening = false;
     			if(mLevelPath == null)
-    				mLevelPath = "0.0.0.lvl"; 
-    			
+    				mLevelPath = "0.0.0.lvl";
+
+    			// Load the scenario that matches this level into the background WebView.
+    			MainActivity.setScenario(mLevelPath);
+
     			if((mLevelPath != "0.0.0.lvl" && mLevelPath != "0.0.1.lvl" && 
     			    mLevelPath.substring(mLevelPath.length() - 5, mLevelPath.length() - 4).equals("1")) && 
     			    !getCurrentPlayer().isOnBonus())
@@ -595,9 +598,17 @@ public class Main implements Runnable {
      * @param path Level file path.
      */
     public void setLevelPath(String path) {
-    	mLevelPath = path;    	
+    	mLevelPath = path;
     }
-        
+
+    /**
+     * Gets the level loading path.
+     * @return Level file path, e.g. "1.2.0.lvl".
+     */
+    public String getLevelPath() {
+    	return mLevelPath;
+    }
+
     /**
      * Gets the music player.
      * @return Object which implements IMusic.
