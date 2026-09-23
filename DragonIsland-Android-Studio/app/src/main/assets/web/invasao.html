@@ -2,701 +2,284 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Invasão Alienígena 512x256</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Invasão Alienígena</title>
 <style>
-  body {
-    margin: 0;
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #05060d;
-    font-family: monospace;
+  :root { --bg:#dfe5f0; --edge:#9fb0d0; --glow:rgba(80,255,140,0.35); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg:#05060d; --edge:#1a3a2a; --glow:rgba(80,255,140,0.45); }
   }
+  :root[data-theme="dark"] { --bg:#05060d; --edge:#1a3a2a; --glow:rgba(80,255,140,0.45); }
+  html,body { margin:0; height:100%; }
+  body { display:flex; align-items:center; justify-content:center; background:var(--bg); }
   .frame {
-    width: 512px;
-    height: 256px;
-    position: relative;
-    border: 2px solid #1a3a2a;
-    border-radius: 6px;
-    overflow: hidden;
-    box-shadow: 0 0 45px rgba(80, 255, 140, 0.5), inset 0 0 20px rgba(120, 255, 180, 0.15);
+    width:min(94vw,1024px,calc((100dvh - 48px) * 2)); aspect-ratio:2/1; position:relative;
+    border:2px solid var(--edge); border-radius:6px; overflow:hidden; background:#01020a;
+    box-shadow:0 0 55px var(--glow), inset 0 0 20px rgba(150,255,200,0.15);
   }
-  canvas { display: block; }
+  canvas { display:block; width:100%; height:100%; }
 </style>
 </head>
 <body>
-<div class="frame">
-  <canvas id="c" width="512" height="256"></canvas>
-</div>
-
+<div class="frame"><canvas id="c" aria-label="Cidade sob invasão alienígena, com nave-mãe e discos voadores"></canvas></div>
+<script src="engine.js"></script>
 <script>
-const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
-const W = 512, H = 256;
-const HORIZON = 190;
-const MOON_X = 100;
-const MOON_Y = 75;
-const MOON_R = 38;
+function makeHero(env) {
+  const { ctx, HORIZON, TAU, rand, R, spr, glowSprite } = env;
 
-const stars = [];
-for (let i = 0; i < 150; i++) {
-  const layer = Math.random();
-  stars.push({
-    x: Math.random() * W,
-    y: Math.random() * HORIZON,
-    r: 0.3 + layer * 1.3,
-    tw: Math.random() * Math.PI * 2,
-    speed: 0.02 + layer * 0.03,
-    depth: layer
-  });
-}
-
-const craters = [];
-for (let i = 0; i < 12; i++) {
-  const a = Math.random() * Math.PI * 2;
-  const d = Math.random() * (MOON_R - 6);
-  craters.push({
-    x: MOON_X + Math.cos(a) * d,
-    y: MOON_Y + Math.sin(a) * d,
-    r: 1.2 + Math.random() * 4,
-    shade: 0.1 + Math.random() * 0.2
-  });
-}
-
-function makeBuildings(count, yBase, minH, maxH, minW, maxW, color) {
-  const arr = [];
-  let x = -20;
-  while (x < W + 20) {
-    const w = minW + Math.random() * (maxW - minW);
-    const h = minH + Math.random() * (maxH - minH);
-    arr.push({
-      x, w, h, color,
-      windows: makeWindows(x, yBase - h, w, h),
-      antenna: Math.random() > 0.7,
-      antennaH: 6 + Math.random() * 18
-    });
-    x += w + 2 + Math.random() * 5;
-  }
-  return arr;
-}
-
-function makeWindows(bx, by, bw, bh) {
-  const wins = [];
-  const cols = Math.max(1, Math.floor(bw / 7));
-  const rows = Math.max(1, Math.floor(bh / 8));
-  for (let i = 0; i < cols; i++) {
-    for (let j = 0; j < rows; j++) {
-      if (Math.random() > 0.6) {
-        wins.push({
-          x: bx + 3 + i * 7,
-          y: by + 5 + j * 8,
-          w: 2, h: 3,
-          hue: Math.random() > 0.7 ? 90 : (Math.random() > 0.5 ? 170 : 45),
-          phase: Math.random() * Math.PI * 2,
-          speed: 0.3 + Math.random() * 1.5
-        });
-      }
-    }
-  }
-  return wins;
-}
-
-const backBuildings = makeBuildings(28, HORIZON, 30, 70, 15, 35, '#0a1a14');
-const frontBuildings = makeBuildings(18, HORIZON + 15, 55, 130, 22, 48, '#020806');
-
-const mothership = {
-  x: 300,
-  y: 60,
-  rx: 70,
-  ry: 14,
-  bobPhase: 0,
-  lightsPhase: 0,
-  scanAngle: 0
-};
-
-const ufos = [];
-function spawnUfo(initial) {
-  ufos.push({
-    x: initial ? Math.random() * W : -40,
-    y: 40 + Math.random() * 100,
-    vx: 0.6 + Math.random() * 0.8,
-    bob: Math.random() * Math.PI * 2,
-    bobSpeed: 0.04 + Math.random() * 0.04,
-    hue: [140, 180, 90, 280, 320][Math.floor(Math.random() * 5)],
-    size: 5 + Math.random() * 5,
-    hasBeam: Math.random() > 0.6,
-    beamPhase: Math.random() * Math.PI * 2,
-    beamAlpha: 0
-  });
-}
-for (let i = 0; i < 4; i++) spawnUfo(true);
-
-const beamParticles = [];
-const BEAM_TARGET_X = mothership.x - 60;
-const BEAM_TARGET_Y = HORIZON + 40;
-
-const abductors = [
-  { x: 130, y: 120, size: 7, hue: 140, phase: 0, targetY: HORIZON + 30 },
-  { x: 420, y: 105, size: 6, hue: 320, phase: 1.5, targetY: HORIZON + 25 }
-];
-
-const groundLights = [];
-for (let i = 0; i < 15; i++) {
-  groundLights.push({
-    x: Math.random() * W,
-    y: HORIZON + 20 + Math.random() * 45,
-    hue: [140, 170, 90, 280][Math.floor(Math.random() * 4)],
-    phase: Math.random() * Math.PI * 2,
-    speed: 0.03 + Math.random() * 0.05
-  });
-}
-
-const dust = [];
-for (let i = 0; i < 60; i++) {
-  dust.push({
-    x: Math.random() * W,
-    y: Math.random() * H,
-    vx: (Math.random() - 0.5) * 0.3,
-    vy: -0.1 - Math.random() * 0.3,
-    r: 0.4 + Math.random() * 1,
-    alpha: 0.2 + Math.random() * 0.4,
-    hue: [140, 180, 320, 280][Math.floor(Math.random() * 4)]
-  });
-}
-
-let t = 0;
-
-function drawSky() {
-  const sky = ctx.createLinearGradient(0, 0, 0, HORIZON);
-  sky.addColorStop(0, '#01030a');
-  sky.addColorStop(0.4, '#05162a');
-  sky.addColorStop(0.75, '#0a2a35');
-  sky.addColorStop(1, '#0f3a30');
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, W, HORIZON);
-
-  const haze = ctx.createLinearGradient(0, HORIZON - 60, 0, HORIZON);
-  haze.addColorStop(0, 'rgba(60, 200, 130, 0)');
-  haze.addColorStop(1, 'rgba(60, 200, 130, 0.18)');
-  ctx.fillStyle = haze;
-  ctx.fillRect(0, HORIZON - 60, W, 60);
-}
-
-function drawStars() {
-  for (const s of stars) {
-    const a = 0.35 + 0.65 * Math.abs(Math.sin(t * s.speed + s.tw));
-    ctx.fillStyle = `rgba(${200 + s.depth * 55}, ${255}, ${220 + s.depth * 35}, ${a})`;
-    ctx.fillRect(s.x, s.y, s.r, s.r);
-  }
-}
-
-function drawMoon() {
-  const glow = ctx.createRadialGradient(MOON_X, MOON_Y, MOON_R * 0.5, MOON_X, MOON_Y, MOON_R * 3);
-  glow.addColorStop(0, 'rgba(180, 255, 210, 0.5)');
-  glow.addColorStop(0.35, 'rgba(120, 220, 180, 0.22)');
-  glow.addColorStop(1, 'rgba(80, 180, 140, 0)');
-  ctx.fillStyle = glow;
-  ctx.beginPath();
-  ctx.arc(MOON_X, MOON_Y, MOON_R * 3, 0, Math.PI * 2);
-  ctx.fill();
-
-  const moonGrad = ctx.createRadialGradient(
-    MOON_X - MOON_R * 0.35, MOON_Y - MOON_R * 0.35, MOON_R * 0.1,
-    MOON_X, MOON_Y, MOON_R
-  );
-  moonGrad.addColorStop(0, '#eafff0');
-  moonGrad.addColorStop(0.55, '#c8e8d6');
-  moonGrad.addColorStop(0.9, '#88b8a0');
-  moonGrad.addColorStop(1, '#5a8878');
-  ctx.fillStyle = moonGrad;
-  ctx.beginPath();
-  ctx.arc(MOON_X, MOON_Y, MOON_R, 0, Math.PI * 2);
-  ctx.fill();
-
-  for (const c of craters) {
-    ctx.fillStyle = `rgba(50, 90, 70, ${c.shade})`;
-    ctx.beginPath();
-    ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = `rgba(255, 255, 255, ${c.shade * 0.5})`;
-    ctx.beginPath();
-    ctx.arc(c.x - c.r * 0.3, c.y - c.r * 0.3, c.r * 0.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-}
-
-function drawMothership() {
-  const mx = mothership.x;
-  const my = mothership.y + Math.sin(t * 0.02 + mothership.bobPhase) * 3;
-  const rx = mothership.rx;
-  const ry = mothership.ry;
-
-  const glow = ctx.createRadialGradient(mx, my, 5, mx, my, rx * 1.8);
-  glow.addColorStop(0, 'rgba(80, 255, 140, 0.35)');
-  glow.addColorStop(0.4, 'rgba(60, 200, 130, 0.15)');
-  glow.addColorStop(1, 'rgba(60, 200, 130, 0)');
-  ctx.fillStyle = glow;
-  ctx.fillRect(mx - rx * 2, my - rx, rx * 4, rx * 2);
-
-  ctx.save();
-  const bodyGrad = ctx.createLinearGradient(mx, my - ry, mx, my + ry);
-  bodyGrad.addColorStop(0, '#3a4a44');
-  bodyGrad.addColorStop(0.5, '#1a2a24');
-  bodyGrad.addColorStop(1, '#0a1410');
-  ctx.fillStyle = bodyGrad;
-  ctx.beginPath();
-  ctx.ellipse(mx, my, rx, ry, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-
-  const domeGrad = ctx.createRadialGradient(mx - rx * 0.2, my - ry, 1, mx, my - ry, rx * 0.5);
-  domeGrad.addColorStop(0, 'rgba(140, 220, 180, 0.6)');
-  domeGrad.addColorStop(0.5, 'rgba(60, 140, 110, 0.35)');
-  domeGrad.addColorStop(1, 'rgba(20, 60, 40, 0.1)');
-  ctx.fillStyle = domeGrad;
-  ctx.beginPath();
-  ctx.ellipse(mx, my - ry * 0.4, rx * 0.45, ry * 0.6, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.strokeStyle = 'rgba(80, 255, 140, 0.75)';
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.ellipse(mx, my + ry * 0.2, rx * 0.98, ry * 0.6, 0, 0, Math.PI * 2);
-  ctx.stroke();
-
-  const numLights = 12;
-  for (let i = 0; i < numLights; i++) {
-    const a = (i / numLights) * Math.PI * 2 + t * 0.02;
-    const lx = mx + Math.cos(a) * rx * 0.85;
-    const ly = my + ry * 0.55 + Math.sin(a) * 2;
-    const pulse = 0.5 + 0.5 * Math.sin(t * 0.1 + i * 0.7);
-    const hue = (140 + i * 12 + t * 2) % 360;
-
-    ctx.fillStyle = `hsla(${hue}, 90%, 65%, ${0.6 + pulse * 0.4})`;
-    ctx.shadowColor = `hsl(${hue}, 90%, 60%)`;
-    ctx.shadowBlur = 6;
-    ctx.beginPath();
-    ctx.arc(lx, ly, 1.6 + pulse * 0.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
+  const MOON_X = 100, MOON_Y = 75, MOON_R = 38;
+  const craters = [];
+  for (let i = 0; i < 12; i++) {
+    const a = rand() * TAU, d = rand() * (MOON_R - 6);
+    craters.push({ x: MOON_X + Math.cos(a) * d, y: MOON_Y + Math.sin(a) * d, r: 1.2 + rand() * 4, shade: 0.1 + rand() * 0.2 });
   }
 
-  const coreGlow = 0.6 + 0.4 * Math.sin(t * 0.08);
-  const coreGrad = ctx.createRadialGradient(mx - rx * 0.15, my + ry * 0.7, 0, mx - rx * 0.15, my + ry * 0.7, 14);
-  coreGrad.addColorStop(0, `rgba(180, 255, 200, ${coreGlow})`);
-  coreGrad.addColorStop(0.4, `rgba(80, 255, 140, ${coreGlow * 0.5})`);
-  coreGrad.addColorStop(1, 'rgba(80, 255, 140, 0)');
-  ctx.fillStyle = coreGrad;
-  ctx.beginPath();
-  ctx.arc(mx - rx * 0.15, my + ry * 0.7, 14, 0, Math.PI * 2);
-  ctx.fill();
+  const mothership = { x: 300, y: 60 };
+  const beamParticles = [];
 
-  ctx.save();
-  ctx.translate(mx, my);
-  const scanA = t * 0.02;
-  const scanGrad = ctx.createLinearGradient(0, 0, Math.cos(scanA) * rx, Math.sin(scanA) * rx);
-  scanGrad.addColorStop(0, 'rgba(120, 255, 180, 0.35)');
-  scanGrad.addColorStop(1, 'rgba(120, 255, 180, 0)');
-  ctx.strokeStyle = scanGrad;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(Math.cos(scanA) * rx * 1.1, Math.sin(scanA) * rx * 0.4);
-  ctx.stroke();
-  ctx.restore();
-
-  const beamX = mx - rx * 0.15;
-  const beamY = my + ry * 0.7;
-  const beamH = HORIZON + 50 - beamY;
-  const beamPulse = 0.65 + 0.35 * Math.sin(t * 0.06);
-
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  const beamGrad = ctx.createLinearGradient(0, beamY, 0, beamY + beamH);
-  beamGrad.addColorStop(0, `rgba(140, 255, 180, ${0.35 * beamPulse})`);
-  beamGrad.addColorStop(0.4, `rgba(100, 230, 150, ${0.18 * beamPulse})`);
-  beamGrad.addColorStop(1, 'rgba(60, 180, 120, 0)');
-  ctx.fillStyle = beamGrad;
-
-  ctx.beginPath();
-  ctx.moveTo(beamX - 6, beamY);
-  ctx.lineTo(beamX + 6, beamY);
-  ctx.lineTo(beamX + 22, beamY + beamH);
-  ctx.lineTo(beamX - 22, beamY + beamH);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.strokeStyle = `rgba(180, 255, 210, ${0.25 * beamPulse})`;
-  ctx.lineWidth = 0.6;
-  for (let i = -3; i <= 3; i++) {
-    ctx.beginPath();
-    ctx.moveTo(beamX + i * 2, beamY);
-    ctx.lineTo(beamX + i * 6, beamY + beamH);
-    ctx.stroke();
-  }
-
-  for (let i = 0; i < 4; i++) {
-    const p = ((t * 0.8 + i * 30) % beamH) / beamH;
-    const cx = beamX + Math.sin(p * Math.PI * 4) * 3;
-    const cy = beamY + p * beamH;
-    const cw = 6 + p * 16;
-    ctx.strokeStyle = `rgba(160, 255, 200, ${(1 - p) * 0.5 * beamPulse})`;
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, cw, cw * 0.3, 0, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  ctx.restore();
-
-  if (t % 3 === 0) {
-    beamParticles.push({
-      x: beamX + (Math.random() - 0.5) * 30,
-      y: beamY + beamH - Math.random() * 20,
-      vy: -0.8 - Math.random() * 0.8,
-      vx: (Math.random() - 0.5) * 0.3,
-      r: 0.8 + Math.random() * 1.2,
-      life: 100,
-      hue: 130 + Math.random() * 60
+  const ufos = [];
+  function spawnUfo(initial) {
+    ufos.push({
+      x: initial ? rand() * 512 : -40, y: 40 + rand() * 100,
+      vx: 0.6 + rand() * 0.8, bob: rand() * TAU, bobSpeed: 0.04 + rand() * 0.04,
+      hue: [140, 180, 90, 280, 320][Math.floor(rand() * 5)], size: 5 + rand() * 5,
+      hasBeam: rand() > 0.6, beamPhase: rand() * TAU
     });
   }
-}
+  for (let i = 0; i < 4; i++) spawnUfo(true);
 
-function drawBeamParticles() {
-  for (let i = beamParticles.length - 1; i >= 0; i--) {
-    const p = beamParticles[i];
-    p.x += p.vx;
-    p.y += p.vy;
-    p.life--;
+  const abductors = [
+    { x: 130, y: 120, size: 7, hue: 140, phase: 0, targetY: HORIZON + 30 },
+    { x: 420, y: 105, size: 6, hue: 320, phase: 1.5, targetY: HORIZON + 25 }
+  ];
 
-    const alpha = Math.min(1, p.life / 60);
-    ctx.fillStyle = `hsla(${p.hue}, 100%, 70%, ${alpha})`;
-    ctx.shadowColor = `hsl(${p.hue}, 100%, 60%)`;
-    ctx.shadowBlur = 4;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-
-    if (p.life <= 0 || p.y < 60) {
-      beamParticles.splice(i, 1);
-    }
-  }
-}
-
-function drawUfos() {
-  for (let i = ufos.length - 1; i >= 0; i--) {
-    const u = ufos[i];
-    u.x += u.vx;
-    u.bob += u.bobSpeed;
-    const dy = Math.sin(u.bob) * 2;
-    const y = u.y + dy;
-
-    const glow = ctx.createRadialGradient(u.x, y, 1, u.x, y, u.size * 3);
-    glow.addColorStop(0, `hsla(${u.hue}, 100%, 65%, 0.5)`);
-    glow.addColorStop(1, `hsla(${u.hue}, 100%, 65%, 0)`);
+  function drawMoon() {
+    const glow = ctx.createRadialGradient(MOON_X, MOON_Y, MOON_R * 0.5, MOON_X, MOON_Y, MOON_R * 3);
+    glow.addColorStop(0, 'rgba(180,255,210,0.5)');
+    glow.addColorStop(0.35, 'rgba(120,220,180,0.22)');
+    glow.addColorStop(1, 'rgba(80,180,140,0)');
     ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(u.x, y, u.size * 3, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(MOON_X, MOON_Y, MOON_R * 3, 0, TAU); ctx.fill();
 
-    if (u.hasBeam) {
-      const beamPulse = 0.5 + 0.5 * Math.sin(t * 0.08 + u.beamPhase);
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const bg = ctx.createLinearGradient(0, y, 0, HORIZON + 30);
-      bg.addColorStop(0, `hsla(${u.hue}, 100%, 75%, ${0.35 * beamPulse})`);
-      bg.addColorStop(1, `hsla(${u.hue}, 100%, 60%, 0)`);
-      ctx.fillStyle = bg;
-      ctx.beginPath();
-      ctx.moveTo(u.x - u.size * 0.6, y + 2);
-      ctx.lineTo(u.x + u.size * 0.6, y + 2);
-      ctx.lineTo(u.x + u.size * 2.2, HORIZON + 30);
-      ctx.lineTo(u.x - u.size * 2.2, HORIZON + 30);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-    }
+    const moonGrad = ctx.createRadialGradient(MOON_X - MOON_R * 0.35, MOON_Y - MOON_R * 0.35, MOON_R * 0.1, MOON_X, MOON_Y, MOON_R);
+    moonGrad.addColorStop(0, '#eafff0'); moonGrad.addColorStop(0.55, '#c8e8d6');
+    moonGrad.addColorStop(0.9, '#88b8a0'); moonGrad.addColorStop(1, '#5a8878');
+    ctx.fillStyle = moonGrad;
+    ctx.beginPath(); ctx.arc(MOON_X, MOON_Y, MOON_R, 0, TAU); ctx.fill();
 
-    ctx.fillStyle = `hsla(${u.hue}, 40%, 15%, 0.95)`;
-    ctx.beginPath();
-    ctx.ellipse(u.x, y, u.size, u.size * 0.35, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = `hsla(${u.hue}, 100%, 65%, 0.85)`;
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.ellipse(u.x, y + 1, u.size * 0.95, u.size * 0.3, 0, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.fillStyle = `hsla(${u.hue}, 100%, 75%, 0.6)`;
-    ctx.beginPath();
-    ctx.ellipse(u.x, y - u.size * 0.25, u.size * 0.35, u.size * 0.28, 0, Math.PI, 0);
-    ctx.fill();
-
-    const numL = 5;
-    for (let k = 0; k < numL; k++) {
-      const a = (k / numL) * Math.PI * 2 + t * 0.15;
-      const lx = u.x + Math.cos(a) * u.size * 0.85;
-      const ly = y + Math.sin(a) * u.size * 0.28;
-      const pulse = 0.4 + 0.6 * Math.abs(Math.sin(t * 0.15 + k));
-      ctx.fillStyle = `hsla(${u.hue}, 100%, 70%, ${pulse})`;
-      ctx.beginPath();
-      ctx.arc(lx, ly, 0.9, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    if (u.x > W + 40) {
-      ufos.splice(i, 1);
+    for (const c of craters) {
+      ctx.fillStyle = `rgba(50,90,70,${c.shade})`;
+      ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, TAU); ctx.fill();
+      ctx.fillStyle = `rgba(255,255,255,${c.shade * 0.5})`;
+      ctx.beginPath(); ctx.arc(c.x - c.r * 0.3, c.y - c.r * 0.3, c.r * 0.5, 0, TAU); ctx.fill();
     }
   }
-  if (Math.random() < 0.008 && ufos.length < 5) spawnUfo(false);
-}
 
-function drawAbductors() {
-  for (const ab of abductors) {
-    const y = ab.y + Math.sin(t * 0.03 + ab.phase) * 3;
+  function drawMothership(t) {
+    const mx = mothership.x, my = mothership.y + Math.sin(t * 0.02) * 3;
+    const rx = 70, ry = 14;
 
-    const glow = ctx.createRadialGradient(ab.x, y, 1, ab.x, y, ab.size * 3);
-    glow.addColorStop(0, `hsla(${ab.hue}, 100%, 65%, 0.55)`);
-    glow.addColorStop(1, `hsla(${ab.hue}, 100%, 65%, 0)`);
+    const glow = ctx.createRadialGradient(mx, my, 5, mx, my, rx * 1.8);
+    glow.addColorStop(0, 'rgba(80,255,140,0.35)');
+    glow.addColorStop(0.4, 'rgba(60,200,130,0.15)');
+    glow.addColorStop(1, 'rgba(60,200,130,0)');
     ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(ab.x, y, ab.size * 3, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillRect(mx - rx * 2, my - rx, rx * 4, rx * 2);
 
-    const beamPulse = 0.6 + 0.4 * Math.sin(t * 0.09 + ab.phase);
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    const bg = ctx.createLinearGradient(0, y, 0, ab.targetY);
-    bg.addColorStop(0, `hsla(${ab.hue}, 100%, 75%, ${0.4 * beamPulse})`);
-    bg.addColorStop(0.6, `hsla(${ab.hue}, 100%, 65%, ${0.18 * beamPulse})`);
-    bg.addColorStop(1, `hsla(${ab.hue}, 100%, 60%, 0)`);
-    ctx.fillStyle = bg;
-    ctx.beginPath();
-    ctx.moveTo(ab.x - ab.size * 0.5, y + 2);
-    ctx.lineTo(ab.x + ab.size * 0.5, y + 2);
-    ctx.lineTo(ab.x + ab.size * 2.4, ab.targetY);
-    ctx.lineTo(ab.x - ab.size * 2.4, ab.targetY);
-    ctx.closePath();
-    ctx.fill();
+    const bodyGrad = ctx.createLinearGradient(mx, my - ry, mx, my + ry);
+    bodyGrad.addColorStop(0, '#3a4a44'); bodyGrad.addColorStop(0.5, '#1a2a24'); bodyGrad.addColorStop(1, '#0a1410');
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath(); ctx.ellipse(mx, my, rx, ry, 0, 0, TAU); ctx.fill();
 
-    const bh = ab.targetY - y;
-    for (let i = 0; i < 3; i++) {
-      const p = ((t * 1.2 + i * 40) % bh) / bh;
-      const cy = ab.targetY - p * bh;
-      const cw = ab.size * 2.4 - p * (ab.size * 1.9);
-      ctx.strokeStyle = `hsla(${ab.hue}, 100%, 75%, ${(1 - p) * 0.5 * beamPulse})`;
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.ellipse(ab.x, cy, cw, cw * 0.25, 0, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    ctx.restore();
+    const domeGrad = ctx.createRadialGradient(mx - rx * 0.2, my - ry, 1, mx, my - ry, rx * 0.5);
+    domeGrad.addColorStop(0, 'rgba(140,220,180,0.6)'); domeGrad.addColorStop(0.5, 'rgba(60,140,110,0.35)'); domeGrad.addColorStop(1, 'rgba(20,60,40,0.1)');
+    ctx.fillStyle = domeGrad;
+    ctx.beginPath(); ctx.ellipse(mx, my - ry * 0.4, rx * 0.45, ry * 0.6, 0, 0, TAU); ctx.fill();
 
-    ctx.fillStyle = `hsla(${ab.hue}, 40%, 15%, 0.95)`;
-    ctx.beginPath();
-    ctx.ellipse(ab.x, y, ab.size, ab.size * 0.35, 0, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.strokeStyle = 'rgba(80,255,140,0.75)'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.ellipse(mx, my + ry * 0.2, rx * 0.98, ry * 0.6, 0, 0, TAU); ctx.stroke();
 
-    ctx.strokeStyle = `hsla(${ab.hue}, 100%, 65%, 0.9)`;
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.ellipse(ab.x, y + 1, ab.size * 0.95, ab.size * 0.3, 0, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.fillStyle = `hsla(${ab.hue}, 100%, 75%, 0.7)`;
-    ctx.beginPath();
-    ctx.ellipse(ab.x, y - ab.size * 0.25, ab.size * 0.35, ab.size * 0.28, 0, Math.PI, 0);
-    ctx.fill();
-
-    for (let k = 0; k < 5; k++) {
-      const a = (k / 5) * Math.PI * 2 + t * 0.2 + ab.phase;
-      const lx = ab.x + Math.cos(a) * ab.size * 0.85;
-      const ly = y + Math.sin(a) * ab.size * 0.28;
-      const pulse = 0.4 + 0.6 * Math.abs(Math.sin(t * 0.2 + k + ab.phase));
-      ctx.fillStyle = `hsla(${ab.hue}, 100%, 70%, ${pulse})`;
-      ctx.beginPath();
-      ctx.arc(lx, ly, 1, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-}
-
-function drawBuildings(list, yOffset) {
-  for (const b of list) {
-    const topY = HORIZON + yOffset - b.h;
-
-    const grad = ctx.createLinearGradient(0, topY, 0, HORIZON + yOffset);
-    grad.addColorStop(0, b.color);
-    grad.addColorStop(1, '#01040a');
-    ctx.fillStyle = grad;
-    ctx.fillRect(b.x, topY, b.w, b.h);
-
-    ctx.fillStyle = 'rgba(80, 255, 140, 0.55)';
-    ctx.fillRect(b.x, topY, b.w, 1);
-
-    if (b.antenna) {
-      ctx.strokeStyle = 'rgba(120, 255, 170, 0.55)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(b.x + b.w / 2, topY);
-      ctx.lineTo(b.x + b.w / 2, topY - b.antennaH);
-      ctx.stroke();
-
-      const blink = Math.sin(t * 0.15 + b.x * 0.1) > 0 ? 1 : 0.25;
-      ctx.fillStyle = `rgba(255, 80, 120, ${blink})`;
-      ctx.shadowColor = '#ff4a78';
-      ctx.shadowBlur = 6;
-      ctx.beginPath();
-      ctx.arc(b.x + b.w / 2, topY - b.antennaH, 1.5, 0, Math.PI * 2);
-      ctx.fill();
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * TAU + t * 0.02;
+      const lx = mx + Math.cos(a) * rx * 0.85, ly = my + ry * 0.55 + Math.sin(a) * 2;
+      const pulse = 0.5 + 0.5 * Math.sin(t * 0.1 + i * 0.7);
+      const hue = (140 + i * 12 + t * 2) % 360;
+      ctx.fillStyle = `hsla(${hue},90%,65%,${0.6 + pulse * 0.4})`;
+      ctx.shadowColor = `hsl(${hue},90%,60%)`; ctx.shadowBlur = 6;
+      ctx.beginPath(); ctx.arc(lx, ly, 1.6 + pulse * 0.6, 0, TAU); ctx.fill();
       ctx.shadowBlur = 0;
     }
 
-    for (const w of b.windows) {
-      const flick = Math.sin(t * 0.05 * w.speed + w.phase);
-      if (flick > -0.4) {
-        const a = 0.4 + 0.6 * Math.abs(flick);
-        ctx.fillStyle = `hsla(${w.hue}, 90%, 70%, ${a})`;
-        ctx.fillRect(w.x, w.y + yOffset, w.w, w.h);
-        ctx.fillStyle = `hsla(${w.hue}, 90%, 70%, ${a * 0.2})`;
-        ctx.fillRect(w.x - 1, w.y + yOffset - 1, w.w + 2, w.h + 2);
+    const beamX = mx - rx * 0.15, beamY = my + ry * 0.7, beamH = HORIZON + 50 - beamY;
+    const beamPulse = 0.65 + 0.35 * Math.sin(t * 0.06);
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const beamGrad = ctx.createLinearGradient(0, beamY, 0, beamY + beamH);
+    beamGrad.addColorStop(0, `rgba(140,255,180,${0.35 * beamPulse})`);
+    beamGrad.addColorStop(0.4, `rgba(100,230,150,${0.18 * beamPulse})`);
+    beamGrad.addColorStop(1, 'rgba(60,180,120,0)');
+    ctx.fillStyle = beamGrad;
+    ctx.beginPath();
+    ctx.moveTo(beamX - 6, beamY); ctx.lineTo(beamX + 6, beamY);
+    ctx.lineTo(beamX + 22, beamY + beamH); ctx.lineTo(beamX - 22, beamY + beamH);
+    ctx.closePath(); ctx.fill();
+
+    for (let i = 0; i < 4; i++) {
+      const p = ((t * 0.8 + i * 30) % beamH) / beamH;
+      const cx = beamX + Math.sin(p * Math.PI * 4) * 3, cy = beamY + p * beamH;
+      const cw = 6 + p * 16;
+      ctx.strokeStyle = `rgba(160,255,200,${(1 - p) * 0.5 * beamPulse})`; ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.ellipse(cx, cy, cw, cw * 0.3, 0, 0, TAU); ctx.stroke();
+    }
+    ctx.restore();
+
+    if (Math.floor(t) % 3 === 0) {
+      beamParticles.push({ x: beamX + (rand() - 0.5) * 30, y: beamY + beamH - rand() * 20, vy: -0.8 - rand() * 0.8, r: 0.8 + rand() * 1.2, life: 100, hue: 130 + rand() * 60 });
+    }
+  }
+
+  function drawBeamParticles() {
+    for (let i = beamParticles.length - 1; i >= 0; i--) {
+      const p = beamParticles[i];
+      p.y += p.vy; p.life--;
+      const alpha = Math.min(1, p.life / 60);
+      ctx.fillStyle = `hsla(${p.hue},100%,70%,${alpha})`;
+      ctx.shadowColor = `hsl(${p.hue},100%,60%)`; ctx.shadowBlur = 4;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.fill();
+      ctx.shadowBlur = 0;
+      if (p.life <= 0 || p.y < 60) beamParticles.splice(i, 1);
+    }
+  }
+
+  function drawUfos(t) {
+    for (let i = ufos.length - 1; i >= 0; i--) {
+      const u = ufos[i];
+      u.x += u.vx; u.bob += u.bobSpeed;
+      const y = u.y + Math.sin(u.bob) * 2;
+
+      const glow = ctx.createRadialGradient(u.x, y, 1, u.x, y, u.size * 3);
+      glow.addColorStop(0, `hsla(${u.hue},100%,65%,0.5)`); glow.addColorStop(1, `hsla(${u.hue},100%,65%,0)`);
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(u.x, y, u.size * 3, 0, TAU); ctx.fill();
+
+      if (u.hasBeam) {
+        const beamPulse = 0.5 + 0.5 * Math.sin(t * 0.08 + u.beamPhase);
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const bg = ctx.createLinearGradient(0, y, 0, HORIZON + 30);
+        bg.addColorStop(0, `hsla(${u.hue},100%,75%,${0.35 * beamPulse})`); bg.addColorStop(1, `hsla(${u.hue},100%,60%,0)`);
+        ctx.fillStyle = bg;
+        ctx.beginPath();
+        ctx.moveTo(u.x - u.size * 0.6, y + 2); ctx.lineTo(u.x + u.size * 0.6, y + 2);
+        ctx.lineTo(u.x + u.size * 2.2, HORIZON + 30); ctx.lineTo(u.x - u.size * 2.2, HORIZON + 30);
+        ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+
+      ctx.fillStyle = `hsla(${u.hue},40%,15%,0.95)`;
+      ctx.beginPath(); ctx.ellipse(u.x, y, u.size, u.size * 0.35, 0, 0, TAU); ctx.fill();
+      ctx.strokeStyle = `hsla(${u.hue},100%,65%,0.85)`; ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.ellipse(u.x, y + 1, u.size * 0.95, u.size * 0.3, 0, 0, TAU); ctx.stroke();
+      ctx.fillStyle = `hsla(${u.hue},100%,75%,0.6)`;
+      ctx.beginPath(); ctx.ellipse(u.x, y - u.size * 0.25, u.size * 0.35, u.size * 0.28, 0, Math.PI, 0); ctx.fill();
+
+      for (let k = 0; k < 5; k++) {
+        const a = (k / 5) * TAU + t * 0.15;
+        const lx = u.x + Math.cos(a) * u.size * 0.85, ly = y + Math.sin(a) * u.size * 0.28;
+        const pulse = 0.4 + 0.6 * Math.abs(Math.sin(t * 0.15 + k));
+        ctx.fillStyle = `hsla(${u.hue},100%,70%,${pulse})`;
+        ctx.beginPath(); ctx.arc(lx, ly, 0.9, 0, TAU); ctx.fill();
+      }
+
+      if (u.x > 552) ufos.splice(i, 1);
+    }
+    if (Math.random() < 0.008 && ufos.length < 5) spawnUfo(false);
+  }
+
+  function drawAbductors(t) {
+    for (const ab of abductors) {
+      const y = ab.y + Math.sin(t * 0.03 + ab.phase) * 3;
+      const glow = ctx.createRadialGradient(ab.x, y, 1, ab.x, y, ab.size * 3);
+      glow.addColorStop(0, `hsla(${ab.hue},100%,65%,0.55)`); glow.addColorStop(1, `hsla(${ab.hue},100%,65%,0)`);
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(ab.x, y, ab.size * 3, 0, TAU); ctx.fill();
+
+      const beamPulse = 0.6 + 0.4 * Math.sin(t * 0.09 + ab.phase);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const bg = ctx.createLinearGradient(0, y, 0, ab.targetY);
+      bg.addColorStop(0, `hsla(${ab.hue},100%,75%,${0.4 * beamPulse})`);
+      bg.addColorStop(0.6, `hsla(${ab.hue},100%,65%,${0.18 * beamPulse})`);
+      bg.addColorStop(1, `hsla(${ab.hue},100%,60%,0)`);
+      ctx.fillStyle = bg;
+      ctx.beginPath();
+      ctx.moveTo(ab.x - ab.size * 0.5, y + 2); ctx.lineTo(ab.x + ab.size * 0.5, y + 2);
+      ctx.lineTo(ab.x + ab.size * 2.4, ab.targetY); ctx.lineTo(ab.x - ab.size * 2.4, ab.targetY);
+      ctx.closePath(); ctx.fill();
+
+      const bh = ab.targetY - y;
+      for (let i = 0; i < 3; i++) {
+        const p = ((t * 1.2 + i * 40) % bh) / bh;
+        const cy = ab.targetY - p * bh, cw = ab.size * 2.4 - p * (ab.size * 1.9);
+        ctx.strokeStyle = `hsla(${ab.hue},100%,75%,${(1 - p) * 0.5 * beamPulse})`; ctx.lineWidth = 0.8;
+        ctx.beginPath(); ctx.ellipse(ab.x, cy, cw, cw * 0.25, 0, 0, TAU); ctx.stroke();
+      }
+      ctx.restore();
+
+      ctx.fillStyle = `hsla(${ab.hue},40%,15%,0.95)`;
+      ctx.beginPath(); ctx.ellipse(ab.x, y, ab.size, ab.size * 0.35, 0, 0, TAU); ctx.fill();
+      ctx.strokeStyle = `hsla(${ab.hue},100%,65%,0.9)`; ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.ellipse(ab.x, y + 1, ab.size * 0.95, ab.size * 0.3, 0, 0, TAU); ctx.stroke();
+      ctx.fillStyle = `hsla(${ab.hue},100%,75%,0.7)`;
+      ctx.beginPath(); ctx.ellipse(ab.x, y - ab.size * 0.25, ab.size * 0.35, ab.size * 0.28, 0, Math.PI, 0); ctx.fill();
+
+      for (let k = 0; k < 5; k++) {
+        const a = (k / 5) * TAU + t * 0.2 + ab.phase;
+        const lx = ab.x + Math.cos(a) * ab.size * 0.85, ly = y + Math.sin(a) * ab.size * 0.28;
+        const pulse = 0.4 + 0.6 * Math.abs(Math.sin(t * 0.2 + k + ab.phase));
+        ctx.fillStyle = `hsla(${ab.hue},100%,70%,${pulse})`;
+        ctx.beginPath(); ctx.arc(lx, ly, 1, 0, TAU); ctx.fill();
       }
     }
   }
-}
 
-function drawGround() {
-  const g = ctx.createLinearGradient(0, HORIZON, 0, H);
-  g.addColorStop(0, '#04140e');
-  g.addColorStop(1, '#01040a');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, HORIZON, W, H - HORIZON);
-
-  const refl = ctx.createRadialGradient(mothership.x - mothership.rx * 0.15, HORIZON + 30, 5,
-                                        mothership.x - mothership.rx * 0.15, HORIZON + 30, 110);
-  refl.addColorStop(0, 'rgba(120, 255, 180, 0.35)');
-  refl.addColorStop(0.5, 'rgba(60, 200, 130, 0.12)');
-  refl.addColorStop(1, 'rgba(60, 200, 130, 0)');
-  ctx.fillStyle = refl;
-  ctx.fillRect(0, HORIZON, W, H - HORIZON);
-
-  const moonRefl = ctx.createRadialGradient(MOON_X, HORIZON + 20, 5, MOON_X, HORIZON + 20, 90);
-  moonRefl.addColorStop(0, 'rgba(120, 220, 180, 0.2)');
-  moonRefl.addColorStop(1, 'rgba(120, 220, 180, 0)');
-  ctx.fillStyle = moonRefl;
-  ctx.fillRect(0, HORIZON, W, H - HORIZON);
-
-  ctx.strokeStyle = 'rgba(80, 255, 140, 0.22)';
-  ctx.lineWidth = 1;
-
-  for (let i = 0; i <= 8; i++) {
-    const p = i / 8;
-    const y = HORIZON + Math.pow(p, 1.6) * (H - HORIZON);
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(W, y);
-    ctx.stroke();
-  }
-
-  const cx = W / 2;
-  for (let i = -12; i <= 12; i++) {
-    ctx.beginPath();
-    ctx.moveTo(cx + i * 8, HORIZON);
-    ctx.lineTo(cx + i * 80, H);
-    ctx.stroke();
-  }
-
-  for (const gl of groundLights) {
-    const pulse = 0.4 + 0.6 * Math.abs(Math.sin(t * gl.speed + gl.phase));
-    ctx.fillStyle = `hsla(${gl.hue}, 100%, 65%, ${pulse * 0.5})`;
-    ctx.shadowColor = `hsl(${gl.hue}, 100%, 60%)`;
-    ctx.shadowBlur = 8;
-    ctx.beginPath();
-    ctx.arc(gl.x, gl.y, 1.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-  }
-}
-
-function drawDust() {
-  for (const d of dust) {
-    d.x += d.vx;
-    d.y += d.vy;
-    if (d.y < -10) {
-      d.y = H + 10;
-      d.x = Math.random() * W;
+  return {
+    behind(dt, t) {
+      drawMoon();
+      drawMothership(t);
+      drawBeamParticles();
+      drawUfos(t);
+      drawAbductors(t);
     }
-    if (d.x < 0) d.x = W;
-    if (d.x > W) d.x = 0;
-
-    ctx.fillStyle = `hsla(${d.hue}, 100%, 70%, ${d.alpha})`;
-    ctx.beginPath();
-    ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  };
 }
 
-function drawScanlines() {
-  ctx.fillStyle = 'rgba(0,0,0,0.09)';
-  for (let y = 0; y < H; y += 3) {
-    ctx.fillRect(0, y, W, 1);
-  }
-}
-
-function drawVignette() {
-  const v = ctx.createRadialGradient(W / 2, H / 2, 90, W / 2, H / 2, 320);
-  v.addColorStop(0, 'rgba(0,0,0,0)');
-  v.addColorStop(1, 'rgba(0,0,0,0.7)');
-  ctx.fillStyle = v;
-  ctx.fillRect(0, 0, W, H);
-}
-
-function drawAlienFlash() {
-  if (Math.random() < 0.005) {
-    const fx = Math.random() * W;
-    const fy = Math.random() * HORIZON * 0.8;
-    const flash = ctx.createRadialGradient(fx, fy, 1, fx, fy, 40);
-    flash.addColorStop(0, 'rgba(120, 255, 180, 0.4)');
-    flash.addColorStop(1, 'rgba(120, 255, 180, 0)');
-    ctx.fillStyle = flash;
-    ctx.fillRect(fx - 40, fy - 40, 80, 80);
-  }
-}
-
-window.frameCount = 0;
-function frame() {
-  t++;
-  ctx.clearRect(0, 0, W, H);
-
-  drawSky();
-  drawStars();
-  drawAlienFlash();
-  drawMoon();
-  drawMothership();
-
-  drawUfos();
-  drawAbductors();
-
-  drawBuildings(backBuildings, 0);
-
-  drawGround();
-
-  drawDust();
-
-  drawBeamParticles();
-
-  drawBuildings(frontBuildings, 15);
-
-  drawScanlines();
-  drawVignette();
-
-  window.frameCount++;
-  requestAnimationFrame(frame);
-}
-
-frame();
+SceneEngine.start({
+  seed: 140277,
+  windowHues: [140, 170, 90],
+  neonHues: [140, 90, 320],
+  backColor: '#0a1a14',
+  frontColor: '#020806',
+  backFog: 'rgba(40,140,90,A)',
+  frontFog: 'rgba(20,80,50,A)',
+  rimColor: 'rgba(80,255,140,0.55)',
+  groundNear: '#04140e',
+  gridColor: 'rgb(80,255,140)',
+  cloudRgb: '120,255,180',
+  dustHue: 140,
+  groundReflection: () => ({ x: 300, y: 0, r: 110, color: 'rgba(120,255,180,0.35)' }),
+  paintSky(g, W, H, HORIZON) {
+    const sky = g.createLinearGradient(0, 0, 0, HORIZON);
+    sky.addColorStop(0, '#01030a'); sky.addColorStop(0.4, '#05162a');
+    sky.addColorStop(0.75, '#0a2a35'); sky.addColorStop(1, '#0f3a30');
+    g.fillStyle = sky; g.fillRect(0, 0, W, HORIZON);
+    const haze = g.createLinearGradient(0, HORIZON - 60, 0, HORIZON);
+    haze.addColorStop(0, 'rgba(60,200,130,0)'); haze.addColorStop(1, 'rgba(60,200,130,0.18)');
+    g.fillStyle = haze; g.fillRect(0, HORIZON - 60, W, 60);
+  },
+  makeHero
+});
 </script>
 </body>
 </html>

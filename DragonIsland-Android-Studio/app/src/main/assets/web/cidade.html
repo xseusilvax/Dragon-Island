@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cidade Futurista</title>
+<style>
+  :root { --bg:#dfe5f0; --edge:#9fb0d0; --glow:rgba(120,0,255,0.35); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg:#0a0a14; --edge:#2a2a3e; --glow:rgba(120,0,255,0.5); }
+  }
+  :root[data-theme="dark"] { --bg:#0a0a14; --edge:#2a2a3e; --glow:rgba(120,0,255,0.5); }
+  html,body { margin:0; height:100%; }
+  body { display:flex; align-items:center; justify-content:center; background:var(--bg); }
+  .frame {
+    width:min(94vw,1024px,calc((100dvh - 48px) * 2)); aspect-ratio:2/1; position:relative;
+    border:2px solid var(--edge); border-radius:6px; overflow:hidden; background:#01020a;
+    box-shadow:0 0 55px var(--glow), inset 0 0 20px rgba(0,200,255,0.15);
+  }
+  canvas { display:block; width:100%; height:100%; }
+</style>
+</head>
+<body>
+<div class="frame"><canvas id="c" aria-label="Skyline de cidade futurista com sol neon"></canvas></div>
+<script src="engine.js"></script>
+<script>
+function makeHero(env) {
+  const { ctx, W, HORIZON, TAU } = env;
+  const sunY = HORIZON - 55;
+
+  function drawSun(t) {
+    const glow = ctx.createRadialGradient(W / 2, sunY, 5, W / 2, sunY, 100);
+    glow.addColorStop(0, 'rgba(255,80,180,0.9)');
+    glow.addColorStop(0.5, 'rgba(255,50,120,0.35)');
+    glow.addColorStop(1, 'rgba(255,50,120,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, HORIZON);
+
+    ctx.fillStyle = '#ff5a8a';
+    ctx.beginPath(); ctx.arc(W / 2, sunY, 42, 0, TAU); ctx.fill();
+
+    ctx.fillStyle = 'rgba(10,0,20,0.85)';
+    for (let i = 0; i < 7; i++) {
+      const y = sunY - 28 + i * 9;
+      ctx.fillRect(W / 2 - 48, y, 96, 3);
+    }
+
+    const pulse = 0.6 + 0.4 * Math.sin(t * 0.03);
+    ctx.strokeStyle = `rgba(0,229,255,${0.25 * pulse})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(W / 2, sunY, 46, 0, TAU); ctx.stroke();
+  }
+
+  return { behind(dt, t) { drawSun(t); } };
+}
+
+SceneEngine.start({
+  seed: 20260921,
+  windowHues: [320, 190, 55],
+  neonHues: [320, 190, 55],
+  backColor: '#0d0d1f',
+  frontColor: '#050510',
+  backFog: 'rgba(120,0,255,A)',
+  frontFog: 'rgba(70,0,150,A)',
+  rimColor: 'rgba(0,229,255,0.6)',
+  groundNear: '#1a0030',
+  gridColor: 'rgb(0,229,255)',
+  cloudRgb: '255,45,149',
+  dustHue: 300,
+  groundReflection: () => ({ x: 256, y: 0, r: 140, color: 'rgba(255,45,149,0.25)' }),
+  paintSky(g, W, H, HORIZON) {
+    const sky = g.createLinearGradient(0, 0, 0, HORIZON);
+    sky.addColorStop(0, '#05020f'); sky.addColorStop(0.55, '#1a0533');
+    sky.addColorStop(0.85, '#4a0a4a'); sky.addColorStop(1, '#ff2d6b');
+    g.fillStyle = sky; g.fillRect(0, 0, W, HORIZON);
+  },
+  makeHero
+});
+</script>
+</body>
+</html>

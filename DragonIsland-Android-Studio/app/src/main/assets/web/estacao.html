@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Estação Espacial</title>
+<style>
+  :root { --bg:#dfe5f0; --edge:#9fb0d0; --glow:rgba(200,200,255,0.35); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg:#05060d; --edge:#2a2a4a; --glow:rgba(200,200,255,0.4); }
+  }
+  :root[data-theme="dark"] { --bg:#05060d; --edge:#2a2a4a; --glow:rgba(200,200,255,0.4); }
+  html,body { margin:0; height:100%; }
+  body { display:flex; align-items:center; justify-content:center; background:var(--bg); }
+  .frame {
+    width:min(94vw,1024px,calc((100dvh - 48px) * 2)); aspect-ratio:2/1; position:relative;
+    border:2px solid var(--edge); border-radius:6px; overflow:hidden; background:#01020a;
+    box-shadow:0 0 50px var(--glow), inset 0 0 20px rgba(200,220,255,0.15);
+  }
+  canvas { display:block; width:100%; height:100%; }
+</style>
+</head>
+<body>
+<div class="frame"><canvas id="c" aria-label="Estação espacial em anel girando sobre a cidade, com naves atracando"></canvas></div>
+<script src="engine.js"></script>
+<script>
+function makeHero(env) {
+  const { ctx, TAU, rand } = env;
+  const ST_X = 350, ST_Y = 75, ST_R = 48;
+
+  const shuttles = [];
+  function spawnShuttle() {
+    const dockAngle = rand() * TAU;
+    shuttles.push({
+      from: rand() < 0.5 ? -30 : 542,
+      y: 20 + rand() * 150,
+      dockAngle,
+      progress: 0,
+      speed: 0.006 + rand() * 0.006,
+      hue: rand() < 0.5 ? 190 : 40
+    });
+  }
+  for (let i = 0; i < 2; i++) spawnShuttle();
+
+  function drawRing(t, radiusMul, lineW, alpha, spin) {
+    ctx.save();
+    ctx.translate(ST_X, ST_Y);
+    ctx.rotate(t * spin);
+    ctx.scale(1, 0.34);
+    ctx.strokeStyle = `rgba(210,220,255,${alpha})`;
+    ctx.lineWidth = lineW;
+    ctx.beginPath(); ctx.arc(0, 0, ST_R * radiusMul, 0, TAU); ctx.stroke();
+    // luzes ao redor do anel
+    const n = 16;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU;
+      const pulse = 0.4 + 0.6 * Math.abs(Math.sin(t * 0.08 + i * 0.9));
+      ctx.fillStyle = `rgba(255,220,160,${pulse})`;
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * ST_R * radiusMul, Math.sin(a) * ST_R * radiusMul, 1.3, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawStation(t) {
+    const glow = ctx.createRadialGradient(ST_X, ST_Y, ST_R * 0.6, ST_X, ST_Y, ST_R * 2.4);
+    glow.addColorStop(0, 'rgba(200,220,255,0.3)');
+    glow.addColorStop(1, 'rgba(200,220,255,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(ST_X, ST_Y, ST_R * 2.4, 0, TAU); ctx.fill();
+
+    // anel externo girando
+    drawRing(t, 1, 5, 0.5, 0.006);
+
+    // módulo central
+    const coreGrad = ctx.createRadialGradient(ST_X - 4, ST_Y - 4, 2, ST_X, ST_Y, 14);
+    coreGrad.addColorStop(0, '#e8ecff');
+    coreGrad.addColorStop(0.6, '#8890b0');
+    coreGrad.addColorStop(1, '#3a3f5a');
+    ctx.fillStyle = coreGrad;
+    ctx.beginPath(); ctx.ellipse(ST_X, ST_Y, 14, 9, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = 'rgba(140,200,255,0.6)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(ST_X, ST_Y, 14, 9, 0, 0, TAU); ctx.stroke();
+
+    // braços conectando módulo ao anel
+    ctx.strokeStyle = 'rgba(180,190,220,0.55)'; ctx.lineWidth = 1.4;
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * TAU + t * 0.006;
+      const ex = ST_X + Math.cos(a) * ST_R, ey = ST_Y + Math.sin(a) * ST_R * 0.34;
+      ctx.beginPath(); ctx.moveTo(ST_X, ST_Y); ctx.lineTo(ex, ey); ctx.stroke();
+    }
+
+    // anel interno, sentido oposto
+    drawRing(t, 0.6, 2.5, 0.35, -0.01);
+
+    // painel solar piscando
+    const solarBlink = Math.sin(t * 0.05) > 0.5 ? 1 : 0.4;
+    ctx.fillStyle = `rgba(120,160,255,${0.5 * solarBlink})`;
+    ctx.fillRect(ST_X - 26, ST_Y - 1.5, 14, 3);
+    ctx.fillRect(ST_X + 12, ST_Y - 1.5, 14, 3);
+  }
+
+  function drawShuttles(t) {
+    for (let i = shuttles.length - 1; i >= 0; i--) {
+      const s = shuttles[i];
+      s.progress += s.speed;
+      const dockX = ST_X + Math.cos(s.dockAngle) * ST_R * 1.05;
+      const dockY = ST_Y + Math.sin(s.dockAngle) * ST_R * 1.05 * 0.34;
+      const x = s.from + (dockX - s.from) * s.progress;
+      const y = s.y + (dockY - s.y) * s.progress;
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const trailGrad = ctx.createLinearGradient(x, y, s.from, s.y);
+      trailGrad.addColorStop(0, `hsla(${s.hue},100%,75%,0.7)`);
+      trailGrad.addColorStop(1, `hsla(${s.hue},100%,60%,0)`);
+      ctx.strokeStyle = trailGrad; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - (dockX - s.from) * 0.04, y - (dockY - s.y) * 0.04); ctx.stroke();
+      ctx.fillStyle = `hsla(${s.hue},100%,80%,0.9)`;
+      ctx.shadowColor = `hsl(${s.hue},100%,60%)`; ctx.shadowBlur = 5;
+      ctx.beginPath(); ctx.arc(x, y, 1.8, 0, TAU); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.restore();
+
+      if (s.progress >= 1) { shuttles.splice(i, 1); }
+    }
+    if (rand() < 0.006 && shuttles.length < 3) spawnShuttle();
+  }
+
+  return { behind(dt, t) { drawStation(t); drawShuttles(t); } };
+}
+
+SceneEngine.start({
+  seed: 707070,
+  windowHues: [210, 230, 45],
+  neonHues: [210, 45],
+  backColor: '#0f1224',
+  frontColor: '#040611',
+  backFog: 'rgba(140,150,200,A)',
+  frontFog: 'rgba(80,90,140,A)',
+  rimColor: 'rgba(200,210,255,0.65)',
+  groundNear: '#0a0e20',
+  gridColor: 'rgb(180,190,255)',
+  cloudRgb: '190,200,230',
+  dustHue: 220,
+  groundReflection: () => ({ x: 350, y: 0, r: 150, color: 'rgba(200,220,255,0.25)' }),
+  paintSky(g, W, H, HORIZON) {
+    const sky = g.createLinearGradient(0, 0, 0, HORIZON);
+    sky.addColorStop(0, '#02030a'); sky.addColorStop(0.45, '#0a1030');
+    sky.addColorStop(0.8, '#182858'); sky.addColorStop(1, '#304878');
+    g.fillStyle = sky; g.fillRect(0, 0, W, HORIZON);
+  },
+  makeHero
+});
+</script>
+</body>
+</html>

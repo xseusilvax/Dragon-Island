@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Planeta Gigante</title>
+<style>
+  :root { --bg:#dfe5f0; --edge:#9fb0d0; --glow:rgba(180,120,255,0.35); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg:#05060d; --edge:#2a1a4a; --glow:rgba(180,120,255,0.5); }
+  }
+  :root[data-theme="dark"] { --bg:#05060d; --edge:#2a1a4a; --glow:rgba(180,120,255,0.5); }
+  html,body { margin:0; height:100%; }
+  body { display:flex; align-items:center; justify-content:center; background:var(--bg); }
+  .frame {
+    width:min(94vw,1024px,calc((100dvh - 48px) * 2)); aspect-ratio:2/1; position:relative;
+    border:2px solid var(--edge); border-radius:6px; overflow:hidden; background:#01020a;
+    box-shadow:0 0 55px var(--glow), inset 0 0 20px rgba(200,160,255,0.15);
+  }
+  canvas { display:block; width:100%; height:100%; }
+</style>
+</head>
+<body>
+<div class="frame"><canvas id="c" aria-label="Planeta gigante com anéis atrás da cidade"></canvas></div>
+<script src="engine.js"></script>
+<script>
+function makeHero(env) {
+  const { ctx, W, TAU, rand } = env;
+  const PLANET_X = 360, PLANET_Y = 90, PLANET_R = 58;
+  const MOON_X_OFFSET = 105, MOON_Y_OFFSET = -35, MOON_R_ORBIT = 8;
+
+  const bands = [];
+  const numBands = 14;
+  for (let i = 0; i < numBands; i++) {
+    const y = -PLANET_R + (i / numBands) * (PLANET_R * 2);
+    const nextY = -PLANET_R + ((i + 1) / numBands) * (PLANET_R * 2);
+    bands.push({ y, nextY, hue: 20 + rand() * 30, sat: 40 + rand() * 40, light: 45 + rand() * 25, speed: 0.004 + rand() * 0.01, wobbleSeed: rand() * TAU, wobbleSpeed: 0.01 + rand() * 0.02 });
+  }
+  const storms = [];
+  for (let i = 0; i < 3; i++) {
+    storms.push({ baseY: -PLANET_R * 0.3 + rand() * PLANET_R * 0.7, r: 4 + rand() * 6, hue: 10 + rand() * 25, sat: 70 + rand() * 20, light: 45 + rand() * 15, speed: 0.008 + rand() * 0.012, phase: rand() * TAU });
+  }
+  const spots = [];
+  for (let i = 0; i < 5; i++) {
+    spots.push({ baseY: -PLANET_R * 0.6 + rand() * PLANET_R * 1.2, rx: 6 + rand() * 12, ry: 2 + rand() * 4, speed: 0.005 + rand() * 0.008, phase: rand() * TAU, darkness: 0.15 + rand() * 0.2 });
+  }
+  const ringParticles = [];
+  for (let i = 0; i < 180; i++) {
+    ringParticles.push({ angle: rand() * TAU, dist: PLANET_R * (1.45 + rand() * 0.55), yJitter: (rand() - 0.5) * 3, size: 0.5 + rand() * 1, alpha: 0.25 + rand() * 0.45, speed: 0.0008 + rand() * 0.0008, hue: 30 + rand() * 20 });
+  }
+
+  function drawRings(t, back) {
+    const cx = PLANET_X, cy = PLANET_Y, tilt = 0.32;
+    for (const p of ringParticles) {
+      const a = p.angle + t * p.speed;
+      const rx = Math.cos(a) * p.dist, ry = Math.sin(a) * p.dist * tilt;
+      if ((ry < 0) !== back) continue;
+      const x = cx + rx, y = cy + ry + p.yJitter;
+      if (x < -10 || x > W + 10) continue;
+      const brightness = 1 - Math.abs(rx) / (PLANET_R * 2) * 0.5;
+      ctx.fillStyle = `hsla(${p.hue},45%,${60 + brightness * 20}%,${p.alpha * (back ? 0.5 : 0.85)})`;
+      ctx.fillRect(x, y, p.size, p.size);
+    }
+    const ringRadii = [
+      { inner: PLANET_R * 1.5, outer: PLANET_R * 1.58, alpha: 0.35 },
+      { inner: PLANET_R * 1.65, outer: PLANET_R * 1.78, alpha: 0.55 },
+      { inner: PLANET_R * 1.88, outer: PLANET_R * 1.95, alpha: 0.3 }
+    ];
+    for (const ring of ringRadii) {
+      const midR = (ring.inner + ring.outer) / 2, widthR = (ring.outer - ring.inner) / 2;
+      ctx.save();
+      ctx.translate(cx, cy); ctx.scale(1, tilt);
+      ctx.strokeStyle = `rgba(240,200,150,${ring.alpha * (back ? 0.6 : 1)})`; ctx.lineWidth = widthR;
+      ctx.beginPath();
+      if (back) ctx.arc(0, 0, midR, Math.PI, 0); else ctx.arc(0, 0, midR, 0, Math.PI);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function drawMoonOrbit(t) {
+    const orbitAngle = t * 0.012;
+    const moonX = PLANET_X + Math.cos(orbitAngle) * MOON_X_OFFSET;
+    const moonY = PLANET_Y + Math.sin(orbitAngle) * MOON_Y_OFFSET * 0.6 - 10;
+    ctx.save();
+    ctx.setLineDash([1.5, 4]);
+    ctx.strokeStyle = 'rgba(200,180,255,0.15)'; ctx.lineWidth = 0.6;
+    ctx.beginPath(); ctx.ellipse(PLANET_X, PLANET_Y - 10, MOON_X_OFFSET, Math.abs(MOON_Y_OFFSET) * 0.6, 0, 0, TAU); ctx.stroke();
+    ctx.restore();
+    if (Math.sin(orbitAngle) < 0 && Math.abs(moonX - PLANET_X) < PLANET_R + 5) return;
+    const glow = ctx.createRadialGradient(moonX, moonY, 1, moonX, moonY, MOON_R_ORBIT * 2.5);
+    glow.addColorStop(0, 'rgba(240,230,255,0.6)'); glow.addColorStop(1, 'rgba(200,180,255,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(moonX, moonY, MOON_R_ORBIT * 2.5, 0, TAU); ctx.fill();
+    const moonGrad = ctx.createRadialGradient(moonX - 2, moonY - 2, 0.5, moonX, moonY, MOON_R_ORBIT);
+    moonGrad.addColorStop(0, '#f0eaff'); moonGrad.addColorStop(0.6, '#c8bce0'); moonGrad.addColorStop(1, '#6a5f85');
+    ctx.fillStyle = moonGrad;
+    ctx.beginPath(); ctx.arc(moonX, moonY, MOON_R_ORBIT, 0, TAU); ctx.fill();
+  }
+
+  function drawPlanet(t) {
+    const cx = PLANET_X, cy = PLANET_Y, r = PLANET_R;
+    const atmo = ctx.createRadialGradient(cx, cy, r * 0.9, cx, cy, r * 1.5);
+    atmo.addColorStop(0, 'rgba(255,180,130,0.4)'); atmo.addColorStop(0.4, 'rgba(220,130,200,0.2)'); atmo.addColorStop(1, 'rgba(180,100,200,0)');
+    ctx.fillStyle = atmo;
+    ctx.beginPath(); ctx.arc(cx, cy, r * 1.5, 0, TAU); ctx.fill();
+
+    drawRings(t, true);
+
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.clip();
+    ctx.fillStyle = '#3a1c2a';
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+
+    for (const b of bands) {
+      const wobble = Math.sin(t * b.wobbleSpeed + b.wobbleSeed) * 1.5;
+      ctx.fillStyle = `hsla(${b.hue},${b.sat}%,${b.light}%,0.75)`;
+      ctx.beginPath();
+      ctx.moveTo(cx - r, cy + b.y + wobble);
+      for (let x = -r; x <= r; x += 8) ctx.lineTo(cx + x, cy + b.y + wobble + Math.sin((x + t * 0.6) * 0.08 + b.wobbleSeed) * 1.2);
+      for (let x = r; x >= -r; x -= 8) ctx.lineTo(cx + x, cy + b.nextY + wobble + Math.sin((x + t * 0.6) * 0.08 + b.wobbleSeed) * 1.2);
+      ctx.closePath(); ctx.fill();
+    }
+
+    for (const s of spots) {
+      const angle = t * s.speed + s.phase, cosA = Math.cos(angle);
+      if (cosA > -0.3) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, cosA + 0.3);
+        ctx.fillStyle = `rgba(60,30,40,${s.darkness})`;
+        ctx.beginPath(); ctx.ellipse(cx + Math.sin(angle) * r * 0.7, cy + s.baseY, s.rx, s.ry, 0, 0, TAU); ctx.fill();
+        ctx.restore();
+      }
+    }
+    for (const s of storms) {
+      const angle = t * s.speed + s.phase, cosA = Math.cos(angle);
+      if (cosA > -0.2) {
+        const px = cx + Math.sin(angle) * r * 0.7, py = cy + s.baseY;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, cosA + 0.3);
+        const sg = ctx.createRadialGradient(px, py, 0, px, py, s.r * 1.5);
+        sg.addColorStop(0, `hsla(${s.hue},${s.sat}%,${s.light + 15}%,0.9)`);
+        sg.addColorStop(0.6, `hsla(${s.hue},${s.sat}%,${s.light}%,0.7)`);
+        sg.addColorStop(1, `hsla(${s.hue},${s.sat}%,${s.light}%,0)`);
+        ctx.fillStyle = sg;
+        ctx.beginPath(); ctx.ellipse(px, py, s.r * 1.5, s.r, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = `hsla(${s.hue},${s.sat}%,${s.light - 10}%,0.85)`;
+        ctx.beginPath(); ctx.ellipse(px, py, s.r * 0.7, s.r * 0.5, 0, 0, TAU); ctx.fill();
+        ctx.restore();
+      }
+    }
+    ctx.restore();
+
+    const shadow = ctx.createRadialGradient(cx - r * 0.4, cy - r * 0.4, r * 0.1, cx + r * 0.2, cy + r * 0.2, r * 1.15);
+    shadow.addColorStop(0, 'rgba(255,255,255,0)'); shadow.addColorStop(0.65, 'rgba(20,5,30,0)'); shadow.addColorStop(1, 'rgba(10,0,20,0.85)');
+    ctx.fillStyle = shadow;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.fill();
+
+    const spec = ctx.createRadialGradient(cx - r * 0.45, cy - r * 0.45, 1, cx - r * 0.45, cy - r * 0.45, r * 0.7);
+    spec.addColorStop(0, 'rgba(255,240,200,0.35)'); spec.addColorStop(1, 'rgba(255,240,200,0)');
+    ctx.fillStyle = spec;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.fill();
+
+    ctx.strokeStyle = 'rgba(255,200,150,0.5)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,180,140,0.25)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(cx, cy, r + 2, 0, TAU); ctx.stroke();
+
+    drawRings(t, false);
+    drawMoonOrbit(t);
+  }
+
+  return { behind(dt, t) { drawPlanet(t); } };
+}
+
+SceneEngine.start({
+  seed: 313233,
+  windowHues: [280, 200, 220],
+  neonHues: [280, 200],
+  backColor: '#0a0a24',
+  frontColor: '#030512',
+  backFog: 'rgba(120,60,180,A)',
+  frontFog: 'rgba(80,40,140,A)',
+  rimColor: 'rgba(200,160,255,0.7)',
+  groundNear: '#100820',
+  gridColor: 'rgb(180,140,255)',
+  cloudRgb: '200,180,240',
+  dustHue: 260,
+  groundReflection: () => ({ x: 360, y: 0, r: 180, color: 'rgba(220,140,180,0.3)' }),
+  paintSky(g, W, H, HORIZON) {
+    const sky = g.createLinearGradient(0, 0, 0, HORIZON);
+    sky.addColorStop(0, '#05010f'); sky.addColorStop(0.4, '#0f0825');
+    sky.addColorStop(0.75, '#1a1035'); sky.addColorStop(1, '#2a1848');
+    g.fillStyle = sky; g.fillRect(0, 0, W, HORIZON);
+  },
+  makeHero
+});
+</script>
+</body>
+</html>

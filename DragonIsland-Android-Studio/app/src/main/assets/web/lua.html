@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lua Futurista</title>
+<style>
+  :root { --bg:#dfe5f0; --edge:#9fb0d0; --glow:rgba(120,180,255,0.35); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg:#05060d; --edge:#1a2a4a; --glow:rgba(120,180,255,0.45); }
+  }
+  :root[data-theme="dark"] { --bg:#05060d; --edge:#1a2a4a; --glow:rgba(120,180,255,0.45); }
+  html,body { margin:0; height:100%; }
+  body { display:flex; align-items:center; justify-content:center; background:var(--bg); }
+  .frame {
+    width:min(94vw,1024px,calc((100dvh - 48px) * 2)); aspect-ratio:2/1; position:relative;
+    border:2px solid var(--edge); border-radius:6px; overflow:hidden; background:#01020a;
+    box-shadow:0 0 50px var(--glow), inset 0 0 20px rgba(150,200,255,0.15);
+  }
+  canvas { display:block; width:100%; height:100%; }
+</style>
+</head>
+<body>
+<div class="frame"><canvas id="c" aria-label="Cidade noturna com lua gigante e satélites orbitando"></canvas></div>
+<script src="engine.js"></script>
+<script>
+function makeHero(env) {
+  const { ctx, TAU, rand } = env;
+  const MOON_X = 380, MOON_Y = 80, MOON_R = 46;
+
+  const craters = [];
+  for (let i = 0; i < 16; i++) {
+    const a = rand() * TAU, d = rand() * (MOON_R - 8);
+    craters.push({ x: MOON_X + Math.cos(a) * d, y: MOON_Y + Math.sin(a) * d, r: 1.5 + rand() * 5, shade: 0.1 + rand() * 0.2 });
+  }
+
+  const satellites = [
+    { r: 90, speed: 0.004, phase: 0, size: 2.5, color: '#8fd4ff' },
+    { r: 130, speed: -0.0025, phase: Math.PI, size: 2, color: '#c0e5ff' },
+    { r: 70, speed: 0.007, phase: Math.PI * 0.7, size: 1.6, color: '#ffffff' }
+  ];
+
+  function drawMoon(t) {
+    const glow = ctx.createRadialGradient(MOON_X, MOON_Y, MOON_R * 0.5, MOON_X, MOON_Y, MOON_R * 3.2);
+    glow.addColorStop(0, 'rgba(180,220,255,0.55)'); glow.addColorStop(0.3, 'rgba(140,190,255,0.25)');
+    glow.addColorStop(0.7, 'rgba(90,140,220,0.08)'); glow.addColorStop(1, 'rgba(90,140,220,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(MOON_X, MOON_Y, MOON_R * 3.2, 0, TAU); ctx.fill();
+
+    const pulse = 0.5 + 0.5 * Math.sin(t * 0.03);
+    ctx.strokeStyle = `rgba(160,210,255,${0.15 + pulse * 0.2})`; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(MOON_X, MOON_Y, MOON_R + 4 + pulse * 3, 0, TAU); ctx.stroke();
+
+    const moonGrad = ctx.createRadialGradient(MOON_X - MOON_R * 0.35, MOON_Y - MOON_R * 0.35, MOON_R * 0.1, MOON_X, MOON_Y, MOON_R);
+    moonGrad.addColorStop(0, '#f4f8ff'); moonGrad.addColorStop(0.55, '#d6e2f5');
+    moonGrad.addColorStop(0.9, '#9ab0d0'); moonGrad.addColorStop(1, '#6a80a5');
+    ctx.fillStyle = moonGrad;
+    ctx.beginPath(); ctx.arc(MOON_X, MOON_Y, MOON_R, 0, TAU); ctx.fill();
+
+    for (const c of craters) {
+      ctx.fillStyle = `rgba(70,90,130,${c.shade})`;
+      ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, TAU); ctx.fill();
+      ctx.fillStyle = `rgba(255,255,255,${c.shade * 0.6})`;
+      ctx.beginPath(); ctx.arc(c.x - c.r * 0.3, c.y - c.r * 0.3, c.r * 0.55, 0, TAU); ctx.fill();
+    }
+
+    ctx.save();
+    ctx.beginPath(); ctx.arc(MOON_X, MOON_Y, MOON_R, 0, TAU); ctx.clip();
+    const scanY = ((t * 0.6) % (MOON_R * 2 + 20)) - MOON_R - 10;
+    const scanGrad = ctx.createLinearGradient(0, MOON_Y + scanY - 8, 0, MOON_Y + scanY + 8);
+    scanGrad.addColorStop(0, 'rgba(120,220,255,0)'); scanGrad.addColorStop(0.5, 'rgba(120,220,255,0.35)'); scanGrad.addColorStop(1, 'rgba(120,220,255,0)');
+    ctx.fillStyle = scanGrad;
+    ctx.fillRect(MOON_X - MOON_R, MOON_Y + scanY - 8, MOON_R * 2, 16);
+    ctx.restore();
+  }
+
+  function drawSatellites(t) {
+    for (const s of satellites) {
+      const a = t * s.speed + s.phase;
+      const x = MOON_X + Math.cos(a) * s.r * 1.15, y = MOON_Y + Math.sin(a) * s.r * 0.45;
+
+      ctx.strokeStyle = 'rgba(140,200,255,0.12)';
+      ctx.setLineDash([2, 4]);
+      ctx.beginPath(); ctx.ellipse(MOON_X, MOON_Y, s.r * 1.15, s.r * 0.45, 0, 0, TAU); ctx.stroke();
+      ctx.setLineDash([]);
+
+      const trailGrad = ctx.createLinearGradient(x, y, x - Math.cos(a) * 20, y - Math.sin(a) * 12);
+      trailGrad.addColorStop(0, s.color); trailGrad.addColorStop(1, 'rgba(140,200,255,0)');
+      ctx.strokeStyle = trailGrad; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - Math.cos(a) * 20, y - Math.sin(a) * 12); ctx.stroke();
+
+      ctx.fillStyle = s.color; ctx.shadowColor = s.color; ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.arc(x, y, s.size, 0, TAU); ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  return { behind(dt, t) { drawMoon(t); drawSatellites(t); } };
+}
+
+SceneEngine.start({
+  seed: 76543,
+  windowHues: [200, 220, 45],
+  neonHues: [200, 220],
+  backColor: '#0a1224',
+  frontColor: '#030711',
+  backFog: 'rgba(40,80,140,A)',
+  frontFog: 'rgba(20,40,80,A)',
+  rimColor: 'rgba(140,200,255,0.7)',
+  groundNear: '#081226',
+  gridColor: 'rgb(120,190,255)',
+  cloudRgb: '180,210,255',
+  dustHue: 200,
+  groundReflection: () => ({ x: 380, y: 0, r: 130, color: 'rgba(140,200,255,0.28)' }),
+  paintSky(g, W, H, HORIZON) {
+    const sky = g.createLinearGradient(0, 0, 0, HORIZON);
+    sky.addColorStop(0, '#01020a'); sky.addColorStop(0.45, '#071233');
+    sky.addColorStop(0.8, '#122a55'); sky.addColorStop(1, '#2a4a7a');
+    g.fillStyle = sky; g.fillRect(0, 0, W, HORIZON);
+  },
+  makeHero
+});
+</script>
+</body>
+</html>

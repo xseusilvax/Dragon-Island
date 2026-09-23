@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chuva de Cometas</title>
+<style>
+  :root { --bg:#dfe5f0; --edge:#9fb0d0; --glow:rgba(120,255,210,0.35); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg:#05060d; --edge:#1a3a3a; --glow:rgba(120,255,210,0.45); }
+  }
+  :root[data-theme="dark"] { --bg:#05060d; --edge:#1a3a3a; --glow:rgba(120,255,210,0.45); }
+  html,body { margin:0; height:100%; }
+  body { display:flex; align-items:center; justify-content:center; background:var(--bg); }
+  .frame {
+    width:min(94vw,1024px,calc((100dvh - 48px) * 2)); aspect-ratio:2/1; position:relative;
+    border:2px solid var(--edge); border-radius:6px; overflow:hidden; background:#01020a;
+    box-shadow:0 0 50px var(--glow), inset 0 0 20px rgba(150,255,220,0.15);
+  }
+  canvas { display:block; width:100%; height:100%; }
+</style>
+</head>
+<body>
+<div class="frame"><canvas id="c" aria-label="Chuva de cometas com aurora sobre a cidade"></canvas></div>
+<script src="engine.js"></script>
+<script>
+function makeHero(env) {
+  const { ctx, W, HORIZON, TAU, rand } = env;
+
+  const comets = [];
+  function spawnComet() {
+    const y0 = rand() * 90;
+    comets.push({
+      x: -20, y: y0, vx: 2.2 + rand() * 1.6, vy: 0.5 + rand() * 0.6,
+      size: 2 + rand() * 1.6, hue: [160, 190, 130][Math.floor(rand() * 3)],
+      trail: []
+    });
+  }
+  for (let i = 0; i < 3; i++) spawnComet();
+
+  const auroraBands = [];
+  for (let i = 0; i < 3; i++) {
+    auroraBands.push({ y: 15 + i * 22, amp: 8 + rand() * 10, speed: 0.006 + rand() * 0.006, hue: 150 + rand() * 60, phase: rand() * TAU });
+  }
+
+  function drawAurora(t) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const b of auroraBands) {
+      ctx.beginPath();
+      ctx.moveTo(0, b.y);
+      for (let x = 0; x <= W; x += 8) {
+        ctx.lineTo(x, b.y + Math.sin(x * 0.025 + t * b.speed + b.phase) * b.amp);
+      }
+      ctx.lineTo(W, b.y + 40);
+      ctx.lineTo(0, b.y + 40);
+      ctx.closePath();
+      const g = ctx.createLinearGradient(0, b.y - b.amp, 0, b.y + 40);
+      g.addColorStop(0, `hsla(${b.hue},90%,65%,0.22)`);
+      g.addColorStop(1, `hsla(${b.hue},90%,55%,0)`);
+      ctx.fillStyle = g;
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawComets(t) {
+    for (let i = comets.length - 1; i >= 0; i--) {
+      const c = comets[i];
+      c.x += c.vx; c.y += c.vy;
+      c.trail.push({ x: c.x, y: c.y });
+      if (c.trail.length > 40) c.trail.shift();
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (let j = 1; j < c.trail.length; j++) {
+        const a = c.trail[j - 1], b = c.trail[j];
+        const life = j / c.trail.length;
+        ctx.strokeStyle = `hsla(${c.hue},100%,75%,${life * 0.5})`;
+        ctx.lineWidth = c.size * life;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+      const glow = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, c.size * 5);
+      glow.addColorStop(0, `hsla(${c.hue},100%,85%,0.9)`);
+      glow.addColorStop(0.4, `hsla(${c.hue},100%,70%,0.4)`);
+      glow.addColorStop(1, `hsla(${c.hue},100%,60%,0)`);
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(c.x, c.y, c.size * 5, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(c.x, c.y, c.size * 0.7, 0, TAU); ctx.fill();
+      ctx.restore();
+
+      if (c.x > W + 40 || c.y > HORIZON) comets.splice(i, 1);
+    }
+    if (Math.random() < 0.006 && comets.length < 5) spawnComet();
+  }
+
+  return { behind(dt, t) { drawAurora(t); drawComets(t); } };
+}
+
+SceneEngine.start({
+  seed: 909090,
+  windowHues: [160, 190, 45],
+  neonHues: [160, 130],
+  backColor: '#0a1a1a',
+  frontColor: '#030f0f',
+  backFog: 'rgba(60,200,170,A)',
+  frontFog: 'rgba(30,140,110,A)',
+  rimColor: 'rgba(120,255,210,0.6)',
+  groundNear: '#04201a',
+  gridColor: 'rgb(120,255,210)',
+  cloudRgb: '150,255,220',
+  dustHue: 160,
+  groundReflection: () => ({ x: 256, y: 0, r: 150, color: 'rgba(120,255,210,0.28)' }),
+  paintSky(g, W, H, HORIZON) {
+    const sky = g.createLinearGradient(0, 0, 0, HORIZON);
+    sky.addColorStop(0, '#010a08'); sky.addColorStop(0.45, '#052422');
+    sky.addColorStop(0.8, '#0a3a35'); sky.addColorStop(1, '#155a4a');
+    g.fillStyle = sky; g.fillRect(0, 0, W, HORIZON);
+  },
+  makeHero
+});
+</script>
+</body>
+</html>

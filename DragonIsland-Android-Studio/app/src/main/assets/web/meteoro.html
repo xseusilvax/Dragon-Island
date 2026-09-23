@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Meteoro Cortando o Céu</title>
+<style>
+  :root { --bg:#dfe5f0; --edge:#9fb0d0; --glow:rgba(255,100,40,0.4); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg:#0d0505; --edge:#4a1a10; --glow:rgba(255,100,40,0.55); }
+  }
+  :root[data-theme="dark"] { --bg:#0d0505; --edge:#4a1a10; --glow:rgba(255,100,40,0.55); }
+  html,body { margin:0; height:100%; }
+  body { display:flex; align-items:center; justify-content:center; background:var(--bg); }
+  .frame {
+    width:min(94vw,1024px,calc((100dvh - 48px) * 2)); aspect-ratio:2/1; position:relative;
+    border:2px solid var(--edge); border-radius:6px; overflow:hidden; background:#01020a;
+    box-shadow:0 0 55px var(--glow), inset 0 0 20px rgba(255,180,100,0.15);
+  }
+  canvas { display:block; width:100%; height:100%; }
+</style>
+</head>
+<body>
+<div class="frame"><canvas id="c" aria-label="Meteoro cortando o céu sobre a cidade"></canvas></div>
+<script src="engine.js"></script>
+<script>
+function makeHero(env) {
+  const { ctx, W, HORIZON, TAU, rand } = env;
+
+  const meteor = {
+    progress: 0, duration: 240, x: 0, y: 0, angle: 0, coreFlicker: 0,
+    trailPoints: [], maxTrail: 110,
+    tStart: { x: -20, y: 20 }, tEnd: { x: W + 20, y: 210 },
+    sparks: [], debris: []
+  };
+  const residualSmoke = [];
+  let atmosphereFlash = 0;
+
+  function update(t) {
+    meteor.progress += 1 / meteor.duration;
+    const p = meteor.progress;
+    const eased = Math.pow(p, 1.05);
+    meteor.x = meteor.tStart.x + (meteor.tEnd.x - meteor.tStart.x) * eased;
+    const curveY = Math.pow(eased, 1.25);
+    meteor.y = meteor.tStart.y + (meteor.tEnd.y - meteor.tStart.y) * curveY;
+    const dx = meteor.tEnd.x - meteor.tStart.x;
+    const dy = (meteor.tEnd.y - meteor.tStart.y) * 1.25 * Math.pow(p, 0.25);
+    meteor.angle = Math.atan2(dy, dx);
+    meteor.coreFlicker = 0.75 + 0.25 * Math.sin(t * 0.7) + 0.1 * rand();
+
+    meteor.trailPoints.push({ x: meteor.x, y: meteor.y, life: 1 });
+    if (meteor.trailPoints.length > meteor.maxTrail) meteor.trailPoints.shift();
+    for (const tp of meteor.trailPoints) { tp.life -= 0.012; if (tp.life < 0) tp.life = 0; }
+
+    if (Math.floor(t) % 2 === 0 && meteor.progress < 1) {
+      const backAngle = meteor.angle + Math.PI + (rand() - 0.5) * 0.8;
+      const spd = 1.5 + rand() * 3;
+      meteor.sparks.push({ x: meteor.x + (rand() - 0.5) * 4, y: meteor.y + (rand() - 0.5) * 4, vx: Math.cos(backAngle) * spd, vy: Math.sin(backAngle) * spd - 0.3, life: 40 + rand() * 30, maxLife: 70, hue: 20 + rand() * 30, r: 0.6 + rand() * 1 });
+    }
+    if (rand() < 0.06 && meteor.progress < 0.95) {
+      const backAngle = meteor.angle + Math.PI + (rand() - 0.5) * 0.6;
+      const spd = 1.2 + rand() * 2;
+      meteor.debris.push({ x: meteor.x + (rand() - 0.5) * 5, y: meteor.y + (rand() - 0.5) * 5, vx: Math.cos(backAngle) * spd, vy: Math.sin(backAngle) * spd - 0.4, life: 60 + rand() * 40, maxLife: 100, r: 1.5 + rand() * 1.5, rot: rand() * TAU, rotSpeed: (rand() - 0.5) * 0.15, hue: 15 + rand() * 25 });
+    }
+    if (Math.floor(t) % 3 === 0) {
+      residualSmoke.push({ x: meteor.x + (rand() - 0.5) * 6, y: meteor.y + (rand() - 0.5) * 6, r: 3 + rand() * 4, life: 1, decay: 0.008 + rand() * 0.008, vx: (rand() - 0.5) * 0.15, vy: (rand() - 0.5) * 0.15 - 0.05 });
+    }
+    if (meteor.y > HORIZON - 60 && meteor.y < HORIZON && rand() < 0.3) atmosphereFlash = Math.max(atmosphereFlash, 0.6);
+    if (meteor.progress > 1.02) { meteor.progress = 0; meteor.trailPoints = []; }
+  }
+
+  function drawResidualSmoke() {
+    for (let i = residualSmoke.length - 1; i >= 0; i--) {
+      const s = residualSmoke[i];
+      s.x += s.vx; s.y += s.vy; s.life -= s.decay; s.r += 0.06;
+      if (s.life <= 0) { residualSmoke.splice(i, 1); continue; }
+      const alpha = s.life * 0.45, warmth = s.life;
+      const r = Math.floor(120 + warmth * 130), g = Math.floor(90 + warmth * 80), b = Math.floor(80 + warmth * 30);
+      const grad = ctx.createRadialGradient(s.x - s.r * 0.3, s.y - s.r * 0.3, 0, s.x, s.y, s.r);
+      grad.addColorStop(0, `rgba(${r},${g},${b},${alpha * 0.9})`);
+      grad.addColorStop(0.6, `rgba(${r * 0.7},${g * 0.7},${b * 0.8},${alpha * 0.5})`);
+      grad.addColorStop(1, 'rgba(40,40,50,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, TAU); ctx.fill();
+    }
+  }
+
+  function drawTrail() {
+    if (meteor.trailPoints.length < 2) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 1; i < meteor.trailPoints.length; i++) {
+      const a = meteor.trailPoints[i - 1], b = meteor.trailPoints[i];
+      const g1 = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+      g1.addColorStop(0, `rgba(220,40,20,${a.life * 0.4})`); g1.addColorStop(1, `rgba(220,40,20,${b.life * 0.4})`);
+      ctx.strokeStyle = g1; ctx.lineWidth = 9;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      const g2 = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+      g2.addColorStop(0, `rgba(255,120,40,${a.life * 0.7})`); g2.addColorStop(1, `rgba(255,120,40,${b.life * 0.7})`);
+      ctx.strokeStyle = g2; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      const g3 = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+      g3.addColorStop(0, `rgba(255,220,130,${a.life * 0.9})`); g3.addColorStop(1, `rgba(255,220,130,${b.life * 0.9})`);
+      ctx.strokeStyle = g3; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      ctx.strokeStyle = `rgba(255,255,240,${Math.min(a.life, b.life) * 0.9})`; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawDebris() {
+    for (let i = meteor.debris.length - 1; i >= 0; i--) {
+      const d = meteor.debris[i];
+      d.x += d.vx; d.y += d.vy; d.vy += 0.02; d.rot += d.rotSpeed; d.life--;
+      if (d.life <= 0) { meteor.debris.splice(i, 1); continue; }
+      const alpha = d.life / d.maxLife;
+      const glow = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.r * 4);
+      glow.addColorStop(0, `hsla(${d.hue},100%,70%,${alpha * 0.7})`);
+      glow.addColorStop(0.4, `hsla(${d.hue},100%,55%,${alpha * 0.35})`);
+      glow.addColorStop(1, 'rgba(255,80,20,0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(d.x, d.y, d.r * 4, 0, TAU); ctx.fill();
+      ctx.save();
+      ctx.translate(d.x, d.y); ctx.rotate(d.rot);
+      ctx.fillStyle = `rgba(60,30,20,${alpha})`;
+      ctx.beginPath();
+      ctx.moveTo(-d.r, -d.r * 0.6); ctx.lineTo(d.r * 0.8, -d.r * 0.9); ctx.lineTo(d.r, d.r * 0.4);
+      ctx.lineTo(0, d.r); ctx.lineTo(-d.r * 0.9, d.r * 0.5); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = `hsla(${d.hue},100%,70%,${alpha * 0.9})`;
+      ctx.beginPath(); ctx.arc(0, 0, d.r * 0.5, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function drawSparks() {
+    for (let i = meteor.sparks.length - 1; i >= 0; i--) {
+      const s = meteor.sparks[i];
+      s.x += s.vx; s.y += s.vy; s.vy += 0.04; s.vx *= 0.98; s.life--;
+      if (s.life <= 0) { meteor.sparks.splice(i, 1); continue; }
+      const alpha = s.life / s.maxLife;
+      const trailGrad = ctx.createLinearGradient(s.x, s.y, s.x - s.vx * 5, s.y - s.vy * 5);
+      trailGrad.addColorStop(0, `hsla(${s.hue + 20},100%,75%,${alpha})`); trailGrad.addColorStop(1, `hsla(${s.hue},100%,50%,0)`);
+      ctx.strokeStyle = trailGrad; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(s.x - s.vx * 5, s.y - s.vy * 5); ctx.stroke();
+      ctx.fillStyle = `hsla(${s.hue + 30},100%,85%,${alpha})`;
+      ctx.shadowColor = `hsl(${s.hue},100%,60%)`; ctx.shadowBlur = 4;
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, TAU); ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  function drawMeteor() {
+    const x = meteor.x, y = meteor.y;
+    if (meteor.progress > 1) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const bigGlow = ctx.createRadialGradient(x, y, 2, x, y, 45);
+    bigGlow.addColorStop(0, `rgba(255,140,50,${0.35 * meteor.coreFlicker})`);
+    bigGlow.addColorStop(0.4, `rgba(220,70,30,${0.15 * meteor.coreFlicker})`);
+    bigGlow.addColorStop(1, 'rgba(180,40,20,0)');
+    ctx.fillStyle = bigGlow;
+    ctx.beginPath(); ctx.arc(x, y, 45, 0, TAU); ctx.fill();
+    const glow = ctx.createRadialGradient(x, y, 1, x, y, 18);
+    glow.addColorStop(0, `rgba(255,220,130,${0.85 * meteor.coreFlicker})`);
+    glow.addColorStop(0.35, `rgba(255,140,40,${0.6 * meteor.coreFlicker})`);
+    glow.addColorStop(0.7, `rgba(220,60,20,${0.25 * meteor.coreFlicker})`);
+    glow.addColorStop(1, 'rgba(180,30,10,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(x, y, 18, 0, TAU); ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(x, y); ctx.rotate(meteor.angle);
+    const coreGrad = ctx.createRadialGradient(-1, -1, 0.5, 0, 0, 6);
+    coreGrad.addColorStop(0, '#ffffff'); coreGrad.addColorStop(0.3, '#ffe9a0');
+    coreGrad.addColorStop(0.7, '#ff9a30'); coreGrad.addColorStop(1, '#c33a10');
+    ctx.fillStyle = coreGrad;
+    ctx.beginPath();
+    ctx.moveTo(-5, -3); ctx.lineTo(-1, -4.5); ctx.lineTo(3, -3); ctx.lineTo(5, 0);
+    ctx.lineTo(3, 3.5); ctx.lineTo(-2, 4); ctx.lineTo(-5, 2); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,240,0.9)';
+    ctx.beginPath(); ctx.arc(0, 0, 2, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+
+  return {
+    behind(dt, t) {
+      update(t);
+      if (atmosphereFlash > 0) atmosphereFlash -= 0.02;
+      drawResidualSmoke();
+      drawTrail();
+      drawDebris();
+      drawSparks();
+      drawMeteor();
+    }
+  };
+}
+
+SceneEngine.start({
+  seed: 445566,
+  windowHues: [20, 200, 220],
+  neonHues: [20, 200],
+  backColor: '#0a0a1a',
+  frontColor: '#050208',
+  backFog: 'rgba(200,80,40,A)',
+  frontFog: 'rgba(150,50,30,A)',
+  rimColor: 'rgba(140,200,255,0.6)',
+  groundNear: '#0a0816',
+  gridColor: 'rgb(120,190,255)',
+  cloudRgb: '200,180,200',
+  dustHue: 20,
+  groundReflection: () => ({ x: 256, y: 0, r: 160, color: 'rgba(255,130,50,0.35)' }),
+  paintSky(g, W, H, HORIZON) {
+    const sky = g.createLinearGradient(0, 0, 0, HORIZON);
+    sky.addColorStop(0, '#0a0210'); sky.addColorStop(0.4, '#1a0a1a'); sky.addColorStop(0.7, '#2a1020');
+    sky.addColorStop(0.9, '#3a1810'); sky.addColorStop(1, '#4a1a08');
+    g.fillStyle = sky; g.fillRect(0, 0, W, HORIZON);
+  },
+  makeHero
+});
+</script>
+</body>
+</html>
