@@ -1,2 +1,0 @@
-com.citex.dragonisland.android.MainActivity
-com.citex.dragonisland.android.MainActivity: MainActivity()
